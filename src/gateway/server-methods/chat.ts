@@ -501,6 +501,15 @@ export const chatHandlers: GatewayRequestHandlers = {
             prefixContext.model = extractShortModelName(ctx.model);
             prefixContext.modelFull = `${ctx.provider}/${ctx.model}`;
             prefixContext.thinkingLevel = ctx.thinkLevel ?? "off";
+            // Broadcast model selection to webchat UI
+            context.broadcast("model-selected", {
+              runId: clientRunId,
+              sessionKey: p.sessionKey,
+              provider: ctx.provider,
+              model: ctx.model,
+              modelShort: extractShortModelName(ctx.model),
+              thinkLevel: ctx.thinkLevel ?? "off",
+            });
           },
         },
       })

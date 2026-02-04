@@ -221,6 +221,40 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     void loadCron(host as unknown as Parameters<typeof loadCron>[0]);
   }
 
+  if (evt.event === "model-selected") {
+    const payload = evt.payload as {
+      sessionKey?: string;
+      provider?: string;
+      model?: string;
+      modelShort?: string;
+    } | undefined;
+    if (payload?.sessionKey === host.sessionKey && payload.provider && payload.model) {
+      const modelInfo = {
+        provider: payload.provider,
+        model: payload.model,
+        modelShort: payload.modelShort ?? payload.model,
+      };
+      // Update model info
+      (host as unknown as { chatModelInfo: typeof modelInfo }).chatModelInfo = modelInfo;
+      // Show notification
+      const notification = `Model: ${payload.modelShort ?? payload.model}`;
+      (host as unknown as { chatModelNotification: string | null }).chatModelNotification = notification;
+      // Clear notification after 4 seconds
+      const hostAny = host as unknown as { 
+        chatModelNotificationTimer: number | null;
+        chatModelNotification: string | null;
+      };
+      if (hostAny.chatModelNotificationTimer) {
+        window.clearTimeout(hostAny.chatModelNotificationTimer);
+      }
+      hostAny.chatModelNotificationTimer = window.setTimeout(() => {
+        hostAny.chatModelNotification = null;
+        hostAny.chatModelNotificationTimer = null;
+      }, 4000);
+    }
+    return;
+  }
+
   if (evt.event === "device.pair.requested" || evt.event === "device.pair.resolved") {
     void loadDevices(host as unknown as OpenClawApp, { quiet: true });
   }

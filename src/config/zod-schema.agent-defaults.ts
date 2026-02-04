@@ -135,6 +135,15 @@ export const AgentDefaultsSchema = z
       .optional(),
     heartbeat: HeartbeatSchema,
     maxConcurrent: z.number().int().positive().optional(),
+    modelAutoSelect: z
+      .object({
+        enabled: z.boolean().optional(),
+        defaultModel: z.string().optional(),
+        codingModel: z.string().optional(),
+        keywords: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
     subagents: z
       .object({
         maxConcurrent: z.number().int().positive().optional(),

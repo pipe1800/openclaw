@@ -57,6 +57,7 @@ export type AppViewState = {
   chatAvatarUrl: string | null;
   chatThinkingLevel: string | null;
   chatQueue: ChatQueueItem[];
+  chatModelNotification: string | null;
   nodesLoading: boolean;
   nodes: Array<Record<string, unknown>>;
   devicesLoading: boolean;
@@ -146,6 +147,13 @@ export type AppViewState = {
   logsLevelFilters: Record<LogLevel, boolean>;
   logsAutoFollow: boolean;
   logsTruncated: boolean;
+  // Character editor state
+  characterLoading: boolean;
+  characterSaving: boolean;
+  characterData: import("./controllers/character").CharacterData | null;
+  characterExists: boolean;
+  characterError: string | null;
+  characterDirty: boolean;
   client: GatewayBrowserClient | null;
   connect: () => void;
   setTab: (tab: Tab) => void;

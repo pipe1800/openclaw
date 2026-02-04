@@ -56,13 +56,13 @@
 
 /* Avatar Styles */
 .chat-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   background: var(--panel-strong);
   display: grid;
   place-items: center;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
   flex-shrink: 0;
   align-self: flex-end; /* Align with last message in group */
@@ -77,6 +77,8 @@
 .chat-avatar.assistant {
   background: var(--secondary);
   color: var(--muted);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .chat-avatar.other {

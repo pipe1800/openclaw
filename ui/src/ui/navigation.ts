@@ -7,7 +7,7 @@ export const TAB_GROUPS = [
     tabs: ["overview", "channels", "instances", "sessions", "cron"],
   },
   { label: "Agent", tabs: ["skills", "nodes"] },
-  { label: "Settings", tabs: ["config", "debug", "logs"] },
+  { label: "Settings", tabs: ["character", "config", "debug", "logs"] },
 ] as const;
 
 export type Tab =
@@ -19,6 +19,7 @@ export type Tab =
   | "skills"
   | "nodes"
   | "chat"
+  | "character"
   | "config"
   | "debug"
   | "logs";
@@ -32,6 +33,7 @@ const TAB_PATHS: Record<Tab, string> = {
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
+  character: "/character",
   config: "/config",
   debug: "/debug",
   logs: "/logs",
@@ -118,6 +120,8 @@ export function iconForTab(tab: Tab): IconName {
       return "zap";
     case "nodes":
       return "monitor";
+    case "character":
+      return "user";
     case "config":
       return "settings";
     case "debug":
@@ -147,6 +151,8 @@ export function titleForTab(tab: Tab) {
       return "Nodes";
     case "chat":
       return "Chat";
+    case "character":
+      return "Character";
     case "config":
       return "Config";
     case "debug":
@@ -176,8 +182,10 @@ export function subtitleForTab(tab: Tab) {
       return "Paired devices, capabilities, and command exposure.";
     case "chat":
       return "Direct gateway chat session for quick interventions.";
+    case "character":
+      return "Define personality, traits, and appearance of your AI companion.";
     case "config":
-      return "Edit ~/.openclaw/openclaw.json safely.";
+      return "Edit gateway configuration safely.";
     case "debug":
       return "Gateway snapshots, events, and manual RPC calls.";
     case "logs":

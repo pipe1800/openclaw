@@ -51,6 +51,8 @@ import {
   rotateDeviceToken,
 } from "./controllers/devices";
 import { renderSkills } from "./views/skills";
+import { renderCharacter } from "./views/character";
+import { loadCharacter, saveCharacter, type CharacterData } from "./controllers/character";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers";
 import { loadChannels } from "./controllers/channels";
 import { loadPresence } from "./controllers/presence";
@@ -85,8 +87,9 @@ import { loadLogs } from "./controllers/logs";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
+const DEFAULT_LUMI_AVATAR = "/lumi-avatar.png";
 
-function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
+function resolveAssistantAvatarUrl(state: AppViewState): string {
   const list = state.agentsList?.agents ?? [];
   const parsed = parseAgentSessionKey(state.sessionKey);
   const agentId =
@@ -96,9 +99,9 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
   const agent = list.find((entry) => entry.id === agentId);
   const identity = agent?.identity;
   const candidate = identity?.avatarUrl ?? identity?.avatar;
-  if (!candidate) return undefined;
+  if (!candidate) return DEFAULT_LUMI_AVATAR;
   if (AVATAR_DATA_RE.test(candidate) || AVATAR_HTTP_RE.test(candidate)) return candidate;
-  return identity?.avatarUrl;
+  return identity?.avatarUrl ?? DEFAULT_LUMI_AVATAR;
 }
 
 export function renderApp(state: AppViewState) {
@@ -110,7 +113,7 @@ export function renderApp(state: AppViewState) {
   const chatFocus = isChat && (state.settings.chatFocusMode || state.onboarding);
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const assistantAvatarUrl = resolveAssistantAvatarUrl(state);
-  const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl ?? null;
+  const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl;
 
   return html`
     <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}">
@@ -129,12 +132,12 @@ export function renderApp(state: AppViewState) {
             <span class="nav-collapse-toggle__icon">${icons.menu}</span>
           </button>
           <div class="brand">
-            <div class="brand-logo">
-              <img src="https://mintcdn.com/clawdhub/4rYvG-uuZrMK_URE/assets/pixel-lobster.svg?fit=max&auto=format&n=4rYvG-uuZrMK_URE&q=85&s=da2032e9eac3b5d9bfe7eb96ca6a8a26" alt="OpenClaw" />
+            <div class="brand-logo brand-avatar">
+              <img src="/lumi-avatar.png" alt="Lumi" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">OPENCLAW</div>
-              <div class="brand-sub">Gateway Dashboard</div>
+              <div class="brand-title">LUMI</div>
+              <div class="brand-sub">Control Center</div>
             </div>
           </div>
         </div>
@@ -174,23 +177,7 @@ export function renderApp(state: AppViewState) {
             </div>
           `;
         })}
-        <div class="nav-group nav-group--links">
-          <div class="nav-label nav-label--static">
-            <span class="nav-label__text">Resources</span>
-          </div>
-          <div class="nav-group__items">
-            <a
-              class="nav-item nav-item--external"
-              href="https://docs.openclaw.ai"
-              target="_blank"
-              rel="noreferrer"
-              title="Docs (opens in new tab)"
-            >
-              <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
-              <span class="nav-item__text">Docs</span>
-            </a>
-          </div>
-        </div>
+<!-- Resources section hidden -->
       </aside>
       <main class="content ${isChat ? "content--chat" : ""}">
         <section class="content-header">
@@ -349,6 +336,24 @@ export function renderApp(state: AppViewState) {
             })
           : nothing}
 
+        ${state.tab === "character"
+          ? renderCharacter({
+              loading: state.characterLoading,
+              saving: state.characterSaving,
+              data: state.characterData,
+              exists: state.characterExists,
+              error: state.characterError,
+              dirty: state.characterDirty,
+              connected: state.connected,
+              onRefresh: () => loadCharacter(state),
+              onSave: () => saveCharacter(state),
+              onUpdate: (data: CharacterData) => {
+                state.characterData = data;
+                state.characterDirty = true;
+              },
+            })
+          : nothing}
+
         ${state.tab === "nodes"
           ? renderNodes({
               loading: state.nodesLoading,
@@ -497,6 +502,7 @@ export function renderApp(state: AppViewState) {
               onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
               assistantName: state.assistantName,
               assistantAvatar: state.assistantAvatar,
+              modelNotification: state.chatModelNotification,
             })
           : nothing}
 

@@ -56,6 +56,8 @@ export type ChatProps = {
   // Image attachments
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
+  // Model notification
+  modelNotification?: string | null;
   // Event handlers
   onRefresh: () => void;
   onToggleFocusMode: () => void;
@@ -190,8 +192,8 @@ export function renderChat(props: ChatProps) {
   const reasoningLevel = activeSession?.reasoningLevel ?? "off";
   const showReasoning = props.showThinking && reasoningLevel !== "off";
   const assistantIdentity = {
-    name: props.assistantName,
-    avatar: props.assistantAvatar ?? props.assistantAvatarUrl ?? null,
+    name: props.assistantName || "Lumi",
+    avatar: props.assistantAvatar || props.assistantAvatarUrl || "/lumi-avatar.png",
   };
 
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
@@ -250,6 +252,14 @@ export function renderChat(props: ChatProps) {
         : nothing}
 
       ${renderCompactionIndicator(props.compactionStatus)}
+
+      ${props.modelNotification
+        ? html`
+            <div class="callout info model-notification">
+              ${icons.brain} ${props.modelNotification}
+            </div>
+          `
+        : nothing}
 
       ${props.focusMode
         ? html`

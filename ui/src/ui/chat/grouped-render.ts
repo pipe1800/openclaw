@@ -159,18 +159,20 @@ export function renderMessageGroup(
   `;
 }
 
+const DEFAULT_LUMI_AVATAR = "/lumi-avatar.png";
+
 function renderAvatar(
   role: string,
   assistant?: Pick<AssistantIdentity, "name" | "avatar">,
 ) {
   const normalized = normalizeRoleForGrouping(role);
-  const assistantName = assistant?.name?.trim() || "Assistant";
-  const assistantAvatar = assistant?.avatar?.trim() || "";
+  const assistantName = assistant?.name?.trim() || "Lumi";
+  const assistantAvatar = assistant?.avatar?.trim() || DEFAULT_LUMI_AVATAR;
   const initial =
     normalized === "user"
       ? "U"
       : normalized === "assistant"
-        ? assistantName.charAt(0).toUpperCase() || "A"
+        ? assistantName.charAt(0).toUpperCase() || "L"
         : normalized === "tool"
           ? "⚙"
           : "?";
@@ -183,15 +185,13 @@ function renderAvatar(
           ? "tool"
           : "other";
 
-  if (assistantAvatar && normalized === "assistant") {
-    if (isAvatarUrl(assistantAvatar)) {
-      return html`<img
-        class="chat-avatar ${className}"
-        src="${assistantAvatar}"
-        alt="${assistantName}"
-      />`;
-    }
-    return html`<div class="chat-avatar ${className}">${assistantAvatar}</div>`;
+  // Always use image avatar for assistant
+  if (normalized === "assistant") {
+    return html`<img
+      class="chat-avatar ${className}"
+      src="${assistantAvatar}"
+      alt="${assistantName}"
+    />`;
   }
 
   return html`<div class="chat-avatar ${className}">${initial}</div>`;

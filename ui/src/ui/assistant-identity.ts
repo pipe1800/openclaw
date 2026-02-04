@@ -1,8 +1,8 @@
 const MAX_ASSISTANT_NAME = 50;
 const MAX_ASSISTANT_AVATAR = 200;
 
-export const DEFAULT_ASSISTANT_NAME = "Assistant";
-export const DEFAULT_ASSISTANT_AVATAR = "A";
+export const DEFAULT_ASSISTANT_NAME = "Lumi";
+export const DEFAULT_ASSISTANT_AVATAR = "/lumi-avatar.png";
 
 export type AssistantIdentity = {
   agentId?: string | null;
@@ -30,7 +30,7 @@ export function normalizeAssistantIdentity(
 ): AssistantIdentity {
   const name =
     coerceIdentityValue(input?.name, MAX_ASSISTANT_NAME) ?? DEFAULT_ASSISTANT_NAME;
-  const avatar = coerceIdentityValue(input?.avatar ?? undefined, MAX_ASSISTANT_AVATAR) ?? null;
+  const avatar = coerceIdentityValue(input?.avatar ?? undefined, MAX_ASSISTANT_AVATAR) ?? DEFAULT_ASSISTANT_AVATAR;
   const agentId =
     typeof input?.agentId === "string" && input.agentId.trim()
       ? input.agentId.trim()

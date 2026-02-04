@@ -1,5 +1,5 @@
 import type { ExecToolDefaults } from "../../agents/bash-tools.js";
-import type { ModelAliasIndex } from "../../agents/model-selection.js";
+import type { ModelAliasIndex, resolveModelRefFromString } from "../../agents/model-selection.js";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import type { OpenClawConfig } from "../../config/config.js";
@@ -17,6 +17,11 @@ import { clearInlineDirectives } from "./get-reply-directives-utils.js";
 import { defaultGroupActivation, resolveGroupRequireMention } from "./groups.js";
 import { CURRENT_MESSAGE_MARKER, stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { createModelSelectionState, resolveContextTokens } from "./model-selection.js";
+import {
+  resolveModelAutoSelect,
+  resolveAutoSelectedModel,
+  type ModelAutoSelectResult,
+} from "./model-auto-select.js";
 import { formatElevatedUnavailableMessage, resolveElevatedPermissions } from "./reply-elevated.js";
 import { stripInlineStatus } from "./reply-inline.js";
 import type { TypingController } from "./typing.js";
@@ -60,6 +65,8 @@ export type ReplyDirectiveContinuation = {
     cap?: number;
     dropPolicy?: InlineDirectives["dropPolicy"];
   };
+  /** Auto-selection result (if modelAutoSelect is enabled). */
+  autoSelectResult?: ModelAutoSelectResult;
 };
 
 function resolveExecOverrides(params: {
@@ -373,6 +380,40 @@ export async function resolveReplyDirectives(params: {
     ? resolveBlockStreamingChunking(cfg, sessionCtx.Provider, sessionCtx.AccountId)
     : undefined;
 
+  // Apply model auto-selection if enabled and no explicit model directive
+  const autoSelectConfig = agentCfg?.modelAutoSelect;
+  const autoSelectResult = resolveModelAutoSelect({
+    body: cleanedBody,
+    config: autoSelectConfig,
+    hasExplicitModelDirective: directives.hasModelDirective,
+  });
+
+  // If auto-selection determined a model, resolve it to provider/model
+  let autoSelectedProvider: string | undefined;
+  let autoSelectedModel: string | undefined;
+  if (autoSelectResult.applied && autoSelectConfig) {
+    const autoModelRaw = resolveAutoSelectedModel({
+      result: autoSelectResult,
+      config: autoSelectConfig,
+      fallbackDefault: `${defaultProvider}/${defaultModel}`,
+    });
+    if (autoModelRaw) {
+      // Import resolveModelRefFromString dynamically to resolve alias
+      const { resolveModelRefFromString } = await import("../../agents/model-selection.js");
+      const resolved = resolveModelRefFromString({
+        raw: autoModelRaw,
+        defaultProvider,
+        aliasIndex: params.aliasIndex,
+      });
+      if (resolved) {
+        autoSelectedProvider = resolved.ref.provider;
+        autoSelectedModel = resolved.ref.model;
+        provider = autoSelectedProvider;
+        model = autoSelectedModel;
+      }
+    }
+  }
+
   const modelState = await createModelSelectionState({
     cfg,
     agentCfg,
@@ -478,6 +519,7 @@ export async function resolveReplyDirectives(params: {
       directiveAck,
       perMessageQueueMode,
       perMessageQueueOptions,
+      autoSelectResult: autoSelectResult.applied ? autoSelectResult : undefined,
     },
   };
 }

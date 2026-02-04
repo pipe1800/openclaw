@@ -9,6 +9,7 @@ import { loadExecApprovals } from "./controllers/exec-approvals";
 import { loadPresence } from "./controllers/presence";
 import { loadSessions } from "./controllers/sessions";
 import { loadSkills } from "./controllers/skills";
+import { loadCharacter } from "./controllers/character";
 import { inferBasePathFromPathname, normalizeBasePath, normalizePath, pathForTab, tabFromPath, type Tab } from "./navigation";
 import { saveSettings, type UiSettings } from "./storage";
 import { resolveTheme, type ResolvedTheme, type ThemeMode } from "./theme";
@@ -149,6 +150,7 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "sessions") await loadSessions(host as unknown as OpenClawApp);
   if (host.tab === "cron") await loadCron(host);
   if (host.tab === "skills") await loadSkills(host as unknown as OpenClawApp);
+  if (host.tab === "character") await loadCharacter(host as unknown as OpenClawApp);
   if (host.tab === "nodes") {
     await loadNodes(host as unknown as OpenClawApp);
     await loadDevices(host as unknown as OpenClawApp);

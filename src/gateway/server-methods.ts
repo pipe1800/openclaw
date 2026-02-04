@@ -9,6 +9,7 @@ import { connectHandlers } from "./server-methods/connect.js";
 import { cronHandlers } from "./server-methods/cron.js";
 import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
+import { fileHandlers } from "./server-methods/file.js";
 import { healthHandlers } from "./server-methods/health.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { modelsHandlers } from "./server-methods/models.js";
@@ -72,6 +73,7 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "file.read",
 ]);
 const WRITE_METHODS = new Set([
   "send",
@@ -88,6 +90,7 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "file.write",
 ]);
 
 function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["client"]) {
@@ -155,6 +158,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...cronHandlers,
   ...deviceHandlers,
   ...execApprovalsHandlers,
+  ...fileHandlers,
   ...webHandlers,
   ...modelsHandlers,
   ...configHandlers,

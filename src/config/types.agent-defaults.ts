@@ -196,6 +196,8 @@ export type AgentDefaultsConfig = {
   };
   /** Max concurrent agent runs across all conversations. Default: 1 (sequential). */
   maxConcurrent?: number;
+  /** Automatic model selection based on message content (coding vs chat). */
+  modelAutoSelect?: ModelAutoSelectConfig;
   /** Sub-agent defaults (spawned via sessions_spawn). */
   subagents?: {
     /** Max concurrent sub-agent runs (global lane: "subagent"). Default: 1. */
@@ -235,6 +237,17 @@ export type AgentDefaultsConfig = {
     /** Auto-prune sandbox containers. */
     prune?: SandboxPruneSettings;
   };
+};
+
+export type ModelAutoSelectConfig = {
+  /** Enable automatic model selection based on message content. */
+  enabled?: boolean;
+  /** Default model for casual conversation (alias or provider/model). */
+  defaultModel?: string;
+  /** Model for coding/complex tasks (alias or provider/model). */
+  codingModel?: string;
+  /** Additional keywords that trigger coding model (merged with defaults). */
+  keywords?: string[];
 };
 
 export type AgentCompactionMode = "default" | "safeguard";

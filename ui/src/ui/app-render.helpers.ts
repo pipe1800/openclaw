@@ -1,10 +1,11 @@
-import { html } from "lit";
+import { html, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { AppViewState } from "./app-view-state";
 import { iconForTab, pathForTab, titleForTab, type Tab } from "./navigation";
 import { icons } from "./icons";
 import { loadChatHistory } from "./controllers/chat";
+import { patchSession } from "./controllers/sessions";
 import { refreshChat } from "./app-chat";
 import { syncUrlWithSessionKey } from "./app-settings";
 import type { SessionsListResult } from "./types";
@@ -53,6 +54,19 @@ export function renderChatControls(state: AppViewState) {
   // Refresh icon
   const refreshIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>`;
   const focusIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h3"></path><path d="M20 7V4h-3"></path><path d="M4 17v3h3"></path><path d="M20 17v3h-3"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+
+  const currentModel = state.sessionsResult?.sessions?.find(
+    (row) => row.key === state.sessionKey
+  )?.model;
+
+  let selectedModelValue = "gemini"; // Default fallback
+  if (currentModel) {
+    const lower = currentModel.toLowerCase();
+    if (lower.includes("gemini")) selectedModelValue = "gemini";
+    else if (lower.includes("opus")) selectedModelValue = "opus";
+    else selectedModelValue = "custom";
+  }
+
   return html`
     <div class="chat-controls">
       <label class="field chat-controls__session">
@@ -86,6 +100,23 @@ export function renderChatControls(state: AppViewState) {
                 ${entry.displayName ?? entry.key}
               </option>`,
           )}
+        </select>
+      </label>
+      <label class="field chat-controls__model">
+        <select
+          .value=${selectedModelValue}
+          ?disabled=${!state.connected}
+          @change=${(e: Event) => {
+            const next = (e.target as HTMLSelectElement).value;
+            if (next !== "custom" && next !== selectedModelValue) {
+              void patchSession(state as any, state.sessionKey, { model: next });
+            }
+          }}
+          title="Switch Model"
+        >
+          <option value="gemini">Gemini</option>
+          <option value="opus">Opus</option>
+          ${selectedModelValue === "custom" ? html`<option value="custom">Custom (${currentModel})</option>` : nothing}
         </select>
       </label>
       <button

@@ -1,74 +1,69 @@
 @import './chat.css';
 
 /* ===========================================
-   Cards - Refined with depth
+   Cards - Minimal Lumi style
    =========================================== */
 
 .card {
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   background: var(--card);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  animation: rise 0.35s var(--ease-out) backwards;
+  border-radius: 0;
+  padding: 24px;
+  animation: rise 0.3s var(--ease-out) backwards;
   transition:
     border-color var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--card-highlight);
+    background var(--duration-normal) var(--ease-out);
 }
 
 .card:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-md), inset 0 1px 0 var(--card-highlight);
 }
 
 .card-title {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
   color: var(--text-strong);
 }
 
 .card-sub {
   color: var(--muted);
-  font-size: 13px;
-  margin-top: 6px;
-  line-height: 1.5;
+  font-size: 14px;
+  font-weight: 300;
+  margin-top: 8px;
+  line-height: 1.6;
 }
 
 /* ===========================================
-   Stats - Bold values, subtle labels
+   Stats - Elegant Lumi style
    =========================================== */
 
 .stat {
-  background: var(--card);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  transition:
-    border-color var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out);
-  box-shadow: inset 0 1px 0 var(--card-highlight);
+  background: transparent;
+  border-radius: 0;
+  padding: 16px 0;
+  border: none;
+  border-bottom: 0.5px solid var(--border);
+  transition: border-color var(--duration-normal) var(--ease-out);
 }
 
 .stat:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--card-highlight);
 }
 
 .stat-label {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
 .stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  margin-top: 6px;
-  letter-spacing: -0.03em;
+  font-size: 28px;
+  font-weight: 300;
+  margin-top: 8px;
+  letter-spacing: 0.02em;
   line-height: 1.1;
 }
 
@@ -294,7 +289,7 @@
 }
 
 /* ===========================================
-   Buttons - Tactile with personality
+   Buttons - Minimal Lumi style
    =========================================== */
 
 .btn {
@@ -302,32 +297,27 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  padding: 9px 16px;
+  border: 0.5px solid var(--border-strong);
+  background: transparent;
+  padding: 10px 20px;
   border-radius: var(--radius-md);
   font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  letter-spacing: 0.03em;
   cursor: pointer;
   transition:
     border-color var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    color var(--duration-fast) var(--ease-out);
 }
 
 .btn:hover {
   background: var(--bg-hover);
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--text);
 }
 
 .btn:active {
   background: var(--secondary);
-  transform: translateY(0);
-  box-shadow: none;
 }
 
 .btn svg {
@@ -341,17 +331,17 @@
   flex-shrink: 0;
 }
 
-.btn.primary {
+.btn.primary,
+.btn-primary {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--primary-foreground);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.btn.primary:hover {
+.btn.primary:hover,
+.btn-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow: var(--shadow-md), 0 0 20px var(--accent-glow);
 }
 
 /* Keyboard shortcut badge (shadcn style) */
@@ -410,12 +400,12 @@
 }
 
 /* ===========================================
-   Form Fields
+   Form Fields - Lumi underline style
    =========================================== */
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .field.full {
@@ -424,46 +414,50 @@
 
 .field span {
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .field input,
 .field textarea,
 .field select {
-  border: 1px solid var(--input);
-  background: var(--card);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
+  border: none;
+  border-bottom: 0.5px solid var(--border);
+  background: transparent;
+  border-radius: 0;
+  padding: 12px 0;
   outline: none;
-  box-shadow: inset 0 1px 0 var(--card-highlight);
-  transition:
-    border-color var(--duration-fast) ease,
-    box-shadow var(--duration-fast) ease;
+  font-size: 15px;
+  font-weight: 300;
+  transition: border-color var(--duration-fast) ease;
 }
 
 .field input:focus,
 .field textarea:focus,
 .field select:focus {
-  border-color: var(--ring);
-  box-shadow: var(--focus-ring);
+  border-color: var(--accent);
 }
 
 .field select {
   appearance: none;
-  padding-right: 36px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='1.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 0 center;
   cursor: pointer;
 }
 
 .field textarea {
   font-family: var(--mono);
-  min-height: 160px;
+  font-size: 13px;
+  font-weight: 400;
+  min-height: 120px;
   resize: vertical;
   white-space: pre;
-  line-height: 1.5;
+  line-height: 1.6;
+  border: 0.5px solid var(--border);
+  padding: 12px;
 }
 
 .field.checkbox {
@@ -552,6 +546,38 @@
   border-color: rgba(34, 197, 94, 0.25);
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
   color: var(--ok);
+}
+
+/* Model notification */
+.model-notification {
+  font-size: 13px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  animation: model-notification-fade 4s ease-out forwards;
+}
+
+.model-notification svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes model-notification-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Compaction indicator */
@@ -1483,4 +1509,98 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* ===========================================
+   Character Editor
+   =========================================== */
+
+.character-editor .section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.character-editor .section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.character-editor .section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-strong);
+}
+
+.character-editor .section h4 {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.character-editor .subsection {
+  margin-bottom: 16px;
+}
+
+.character-editor .array-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.character-editor .array-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.character-editor .array-item-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.character-editor .array-item .field {
+  margin-bottom: 0;
+}
+
+.character-editor .btn-danger {
+  background: var(--danger-subtle);
+  color: var(--danger);
+  border-color: var(--danger-subtle);
+}
+
+.character-editor .btn-danger:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.character-editor .btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.character-editor .btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.character-editor .btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.character-editor .btn-primary:disabled {
+  background: var(--secondary);
+  color: var(--muted);
+  border-color: var(--border);
+  cursor: not-allowed;
 }

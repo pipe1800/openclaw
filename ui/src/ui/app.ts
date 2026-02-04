@@ -86,6 +86,7 @@ declare global {
 }
 
 const injectedAssistantIdentity = resolveInjectedAssistantIdentity();
+const DEFAULT_LUMI_AVATAR = "/lumi-avatar.png";
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) return false;
@@ -113,7 +114,7 @@ export class OpenClawApp extends LitElement {
   private sidebarCloseTimer: number | null = null;
 
   @state() assistantName = injectedAssistantIdentity.name;
-  @state() assistantAvatar = injectedAssistantIdentity.avatar;
+  @state() assistantAvatar = injectedAssistantIdentity.avatar || DEFAULT_LUMI_AVATAR;
   @state() assistantAgentId = injectedAssistantIdentity.agentId ?? null;
 
   @state() sessionKey = this.settings.sessionKey;
@@ -128,6 +129,10 @@ export class OpenClawApp extends LitElement {
   @state() compactionStatus: import("./app-tool-stream").CompactionStatus | null = null;
   @state() chatAvatarUrl: string | null = null;
   @state() chatThinkingLevel: string | null = null;
+  // Model notification state
+  @state() chatModelInfo: { provider: string; model: string; modelShort: string } | null = null;
+  @state() chatModelNotification: string | null = null;
+  private chatModelNotificationTimer: number | null = null;
   @state() chatQueue: ChatQueueItem[] = [];
   @state() chatAttachments: ChatAttachment[] = [];
   // Sidebar state for tool output viewing
@@ -246,6 +251,14 @@ export class OpenClawApp extends LitElement {
   @state() logsLimit = 500;
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
+
+  // Character editor state
+  @state() characterLoading = false;
+  @state() characterSaving = false;
+  @state() characterData: import("./controllers/character").CharacterData | null = null;
+  @state() characterExists = false;
+  @state() characterError: string | null = null;
+  @state() characterDirty = false;
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
