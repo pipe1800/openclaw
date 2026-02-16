@@ -2,6 +2,7 @@ import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { createStreamingDirectiveAccumulator } from "../auto-reply/reply/streaming-directives.js";
 import { formatToolAggregate } from "../auto-reply/tool-meta.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { parseInlineDirectives, type PersonaDirective } from "../utils/directive-tags.js";
 import type { InlineCodeState } from "../markdown/code-spans.js";
 import { buildCodeSpanIndex, createInlineCodeState } from "../markdown/code-spans.js";
 import { EmbeddedBlockChunker } from "./pi-embedded-block-chunker.js";
@@ -77,6 +78,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   const pendingMessagingTexts = state.pendingMessagingTexts;
   const pendingMessagingTargets = state.pendingMessagingTargets;
   const replyDirectiveAccumulator = createStreamingDirectiveAccumulator();
+  const collectedPersonaDirectives: PersonaDirective[] = [];
 
   const resetAssistantMessageState = (nextAssistantTextBaseline: number) => {
     state.deltaBuffer = "";
@@ -359,8 +361,24 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   const emitBlockChunk = (text: string) => {
     if (state.suppressBlockChunks) return;
     // Strip <think> and <final> blocks across chunk boundaries to avoid leaking reasoning.
-    const chunk = stripBlockTags(text, state.blockState).trimEnd();
+    let chunk = stripBlockTags(text, state.blockState).trimEnd();
     if (!chunk) return;
+
+    // Extract and collect persona directives (emotion, presence) before further processing.
+    // Tags are stripped from the chunk so they never reach the user.
+    if (params.onPersonaDirectives) {
+      const personaParsed = parseInlineDirectives(chunk, {
+        stripAudioTag: false,
+        stripReplyTags: false,
+        stripPersonaTags: true,
+      });
+      if (personaParsed.personaDirectives.length > 0) {
+        collectedPersonaDirectives.push(...personaParsed.personaDirectives);
+        chunk = personaParsed.text;
+        if (!chunk) return;
+      }
+    }
+
     if (chunk === state.lastBlockReplyText) return;
 
     // Only check committed (successful) messaging tool texts - checking pending texts
@@ -478,6 +496,13 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     // Used to suppress agent's confirmation text (e.g., "Respondi no Telegram!")
     // which is generated AFTER the tool sends the actual answer.
     didSendViaMessagingTool: () => messagingToolSentTexts.length > 0,
+    getCollectedPersonaDirectives: () => collectedPersonaDirectives.slice(),
+    flushPersonaDirectives: () => {
+      if (collectedPersonaDirectives.length > 0 && params.onPersonaDirectives) {
+        void params.onPersonaDirectives(collectedPersonaDirectives.slice());
+        collectedPersonaDirectives.length = 0;
+      }
+    },
     getLastToolError: () => (state.lastToolError ? { ...state.lastToolError } : undefined),
     waitForCompactionRetry: () => {
       if (state.compactionInFlight || state.pendingCompactionRetry > 0) {
