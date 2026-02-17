@@ -131,12 +131,52 @@ async function processEmotionDirective(
 
   // Resolve primary emotion from taxonomy
   let primary = newName;
-  if (state.taxonomy?.secondaries) {
-    const secondaries = state.taxonomy.secondaries as Record<string, string[]>;
-    for (const [prim, secs] of Object.entries(secondaries)) {
-      if (secs.includes(newName.toLowerCase())) {
-        primary = prim;
-        break;
+  let foundInTaxonomy = false;
+  if (state.taxonomy) {
+    const primaries = state.taxonomy.primaries as Record<string, unknown> | undefined;
+    const secondaries = state.taxonomy.secondaries as Record<string, string[]> | undefined;
+    const lowerName = newName.toLowerCase();
+
+    // Check if it's a primary emotion directly
+    if (primaries && lowerName in primaries) {
+      primary = lowerName;
+      foundInTaxonomy = true;
+    }
+    // Check if it's a secondary emotion → resolve to its primary
+    if (!foundInTaxonomy && secondaries) {
+      for (const [prim, secs] of Object.entries(secondaries)) {
+        if (secs.map((s) => s.toLowerCase()).includes(lowerName)) {
+          primary = prim;
+          foundInTaxonomy = true;
+          break;
+        }
+      }
+    }
+    // Check compound emotions
+    if (!foundInTaxonomy && state.taxonomy.compounds) {
+      const compounds = state.taxonomy.compounds as Record<string, string[]>;
+      if (lowerName in compounds) {
+        // Use the first component as primary
+        primary = compounds[lowerName]![0] ?? "neutral";
+        foundInTaxonomy = true;
+      }
+    }
+    // Fallback: use closest primary by trying to match partial names
+    if (!foundInTaxonomy && primaries) {
+      const primaryKeys = Object.keys(primaries);
+      // Check if the emotion name contains a primary (e.g., "romantic love" → "love")
+      const match = primaryKeys.find((pk) => lowerName.includes(pk) || pk.includes(lowerName));
+      if (match) {
+        primary = match;
+        foundInTaxonomy = true;
+      }
+    }
+    // Ultimate fallback: map to nearest known primary by valence/arousal
+    if (!foundInTaxonomy && primaries) {
+      if (newValence !== undefined) {
+        primary = newValence >= 0.3 ? "joy" : newValence <= -0.3 ? "sadness" : "neutral";
+      } else {
+        primary = "neutral";
       }
     }
   }
@@ -179,7 +219,7 @@ async function processEmotionDirective(
   // Set new current
   state.current = {
     primary,
-    secondary: newSecondary ?? newName,
+    secondary: newSecondary ?? (foundInTaxonomy && primary !== newName.toLowerCase() ? newName.toLowerCase() : null),
     valence: Math.round(blendedValence * 1000) / 1000,
     arousal: Math.round(blendedArousal * 1000) / 1000,
     confidence: newConfidence ?? 0.8,

@@ -2,8 +2,29 @@ import { normalizeVerboseLevel } from "../auto-reply/thinking.js";
 import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
+import { parseInlineDirectives } from "../utils/directive-tags.js";
 import { loadSessionEntry } from "./session-utils.js";
 import { formatForLog } from "./ws-log.js";
+
+const PERSONA_TAG_COMPLETE_RE = /\[\[\s*(?:emotion|presence)\s*:[^\]]*\]\]/gi;
+const PERSONA_TAG_INCOMPLETE_RE = /\[\[\s*(?:emotion|presence)\s*:[^\]]*$/i;
+const NARRATION_TAG_RE = /\[\[\s*narration\s*:\s*([^\]]+)\s*\]\]/gi;
+const NARRATION_TAG_INCOMPLETE_RE = /\[\[\s*narration\s*:[^\]]*$/i;
+/** Fast check + strip for persona directive tags in chat text (complete and incomplete). */
+function stripPersonaTags(text: string): string {
+  if (!text.includes("[[")) return text;
+  const result = text
+    .replace(NARRATION_TAG_RE, (_m, body: string) => {
+      const narrationText = body.trim().replace(/^\*+|\*+$/g, "");
+      return `*${narrationText}*`;
+    })
+    .replace(NARRATION_TAG_INCOMPLETE_RE, "")
+    .replace(PERSONA_TAG_COMPLETE_RE, "")
+    .replace(PERSONA_TAG_INCOMPLETE_RE, "")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .trim();
+  return result;
+}
 
 /**
  * Check if webchat broadcasts should be suppressed for heartbeat runs.
@@ -133,7 +154,8 @@ export function createAgentEventHandler({
   resolveSessionKeyForRun,
   clearAgentRunContext,
 }: AgentEventHandlerOptions) {
-  const emitChatDelta = (sessionKey: string, clientRunId: string, seq: number, text: string) => {
+  const emitChatDelta = (sessionKey: string, clientRunId: string, seq: number, rawText: string) => {
+    const text = stripPersonaTags(rawText);
     chatRunState.buffers.set(clientRunId, text);
     const now = Date.now();
     const last = chatRunState.deltaSentAt.get(clientRunId) ?? 0;
@@ -242,13 +264,28 @@ export function createAgentEventHandler({
       });
     }
     agentRunSeq.set(evt.runId, evt.seq);
-    broadcast("agent", agentPayload);
+
+    // Strip persona directive tags from assistant text before broadcasting to clients
+    const broadcastPayload =
+      evt.stream === "assistant" && typeof evt.data?.text === "string"
+        ? {
+            ...agentPayload,
+            data: {
+              ...agentPayload.data,
+              text: stripPersonaTags(evt.data.text as string),
+              ...(typeof evt.data?.delta === "string"
+                ? { delta: stripPersonaTags(evt.data.delta as string) }
+                : {}),
+            },
+          }
+        : agentPayload;
+    broadcast("agent", broadcastPayload);
 
     const lifecyclePhase =
       evt.stream === "lifecycle" && typeof evt.data?.phase === "string" ? evt.data.phase : null;
 
     if (sessionKey) {
-      nodeSendToSession(sessionKey, "agent", agentPayload);
+      nodeSendToSession(sessionKey, "agent", broadcastPayload);
       if (!isAborted && evt.stream === "assistant" && typeof evt.data?.text === "string") {
         emitChatDelta(sessionKey, clientRunId, evt.seq, evt.data.text);
       } else if (!isAborted && (lifecyclePhase === "end" || lifecyclePhase === "error")) {

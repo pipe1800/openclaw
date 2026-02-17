@@ -207,6 +207,33 @@ export const chatHandlers: GatewayRequestHandlers = {
     const max = Math.min(hardMax, requested);
     const sliced = rawMessages.length > max ? rawMessages.slice(-max) : rawMessages;
     const sanitized = stripEnvelopeFromMessages(sliced);
+    // Strip persona directive tags ([[emotion:...]], [[presence:...]], [[narration:...]]) from assistant messages
+    const PERSONA_COMPLETE = /\[\[\s*(?:emotion|presence)\s*:[^\]]*\]\]/gi;
+    const PERSONA_INCOMPLETE = /\[\[\s*(?:emotion|presence)\s*:[^\]]*$/i;
+    const NARRATION_COMPLETE = /\[\[\s*narration\s*:\s*([^\]]+)\s*\]\]/gi;
+    const NARRATION_INCOMPLETE = /\[\[\s*narration\s*:[^\]]*$/i;
+    for (const msg of sanitized) {
+      if (msg && typeof msg === "object" && "role" in msg && (msg as { role: string }).role === "assistant") {
+        const content = (msg as { content?: unknown }).content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block && typeof block === "object" && "type" in block && block.type === "text" && typeof block.text === "string") {
+              if (block.text.includes("[[")) {
+                block.text = block.text
+                  .replace(NARRATION_COMPLETE, (_m: string, body: string) => {
+                    const t = body.trim().replace(/^\*+|\*+$/g, "");
+                    return `*${t}*`;
+                  })
+                  .replace(NARRATION_INCOMPLETE, "")
+                  .replace(PERSONA_COMPLETE, "")
+                  .replace(PERSONA_INCOMPLETE, "")
+                  .trim();
+              }
+            }
+          }
+        }
+      }
+    }
     const capped = capArrayByJsonBytes(sanitized, getMaxChatHistoryMessagesBytes()).items;
     let thinkingLevel = entry?.thinkingLevel;
     if (!thinkingLevel) {

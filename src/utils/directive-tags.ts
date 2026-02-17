@@ -12,6 +12,7 @@ export type InlineDirectiveParseResult = {
   hasAudioTag: boolean;
   hasReplyTag: boolean;
   personaDirectives: PersonaDirective[];
+  narrationSegments: string[];
 };
 
 type InlineDirectiveParseOptions = {
@@ -24,6 +25,7 @@ type InlineDirectiveParseOptions = {
 const AUDIO_TAG_RE = /\[\[\s*audio_as_voice\s*\]\]/gi;
 const REPLY_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*([^\]\n]+))\s*\]\]/gi;
 const PERSONA_TAG_RE = /\[\[\s*(emotion|presence)\s*:\s*([^\]]+)\s*\]\]/gi;
+const NARRATION_TAG_RE = /\[\[\s*narration\s*:\s*([^\]]+)\s*\]\]/gi;
 
 function parsePersonaTagFields(raw: string): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -62,6 +64,7 @@ export function parseInlineDirectives(
       hasAudioTag: false,
       hasReplyTag: false,
       personaDirectives: [],
+      narrationSegments: [],
     };
   }
 
@@ -72,6 +75,7 @@ export function parseInlineDirectives(
   let sawCurrent = false;
   let lastExplicitId: string | undefined;
   const personaDirectives: PersonaDirective[] = [];
+  const narrationSegments: string[] = [];
 
   cleaned = cleaned.replace(AUDIO_TAG_RE, (match) => {
     audioAsVoice = true;
@@ -88,6 +92,16 @@ export function parseInlineDirectives(
       if (id) lastExplicitId = id;
     }
     return stripReplyTags ? " " : match;
+  });
+
+  // Narration tags → italic markdown
+  cleaned = cleaned.replace(NARRATION_TAG_RE, (_match, body: string) => {
+    const narrationText = body.trim().replace(/^\*+|\*+$/g, ""); // strip leading/trailing asterisks
+    narrationSegments.push(narrationText);
+    if (stripPersonaTags) {
+      return `*${narrationText}*`;
+    }
+    return _match;
   });
 
   cleaned = cleaned.replace(PERSONA_TAG_RE, (match, type: string, body: string) => {
@@ -115,5 +129,6 @@ export function parseInlineDirectives(
     hasAudioTag,
     hasReplyTag,
     personaDirectives,
+    narrationSegments,
   };
 }

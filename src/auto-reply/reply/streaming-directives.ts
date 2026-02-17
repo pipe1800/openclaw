@@ -36,9 +36,10 @@ const parseChunk = (raw: string, options?: { silentToken?: string }): ParsedChun
   const replyParsed = parseInlineDirectives(text, {
     stripAudioTag: false,
     stripReplyTags: true,
+    stripPersonaTags: true,
   });
 
-  if (replyParsed.hasReplyTag) {
+  if (replyParsed.hasReplyTag || replyParsed.personaDirectives.length > 0) {
     text = replyParsed.text;
   }
 
