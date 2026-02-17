@@ -79,6 +79,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   const pendingMessagingTargets = state.pendingMessagingTargets;
   const replyDirectiveAccumulator = createStreamingDirectiveAccumulator();
   const collectedPersonaDirectives: PersonaDirective[] = [];
+  let collectedNarrationSegments: string[] = [];
 
   const resetAssistantMessageState = (nextAssistantTextBaseline: number) => {
     state.deltaBuffer = "";
@@ -372,6 +373,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
         stripReplyTags: false,
         stripPersonaTags: true,
       });
+      if (personaParsed.narrationSegments.length > 0) {
+        collectedNarrationSegments = personaParsed.narrationSegments;
+      }
       if (personaParsed.personaDirectives.length > 0) {
         collectedPersonaDirectives.push(...personaParsed.personaDirectives);
         chunk = personaParsed.text;
@@ -498,9 +502,10 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     didSendViaMessagingTool: () => messagingToolSentTexts.length > 0,
     getCollectedPersonaDirectives: () => collectedPersonaDirectives.slice(),
     flushPersonaDirectives: () => {
-      if (collectedPersonaDirectives.length > 0 && params.onPersonaDirectives) {
-        void params.onPersonaDirectives(collectedPersonaDirectives.slice());
+      if ((collectedPersonaDirectives.length > 0 || collectedNarrationSegments.length > 0) && params.onPersonaDirectives) {
+        void params.onPersonaDirectives(collectedPersonaDirectives.slice(), collectedNarrationSegments.slice());
         collectedPersonaDirectives.length = 0;
+        collectedNarrationSegments = [];
       }
     },
     getLastToolError: () => (state.lastToolError ? { ...state.lastToolError } : undefined),

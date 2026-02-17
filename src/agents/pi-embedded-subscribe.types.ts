@@ -33,7 +33,7 @@ export type SubscribeEmbeddedPiSessionParams = {
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void | Promise<void>;
   enforceFinalTag?: boolean;
   /** Called when persona directives (emotion, presence) are extracted from the response. */
-  onPersonaDirectives?: (directives: PersonaDirective[]) => void | Promise<void>;
+  onPersonaDirectives?: (directives: PersonaDirective[], narrationSegments?: string[]) => void | Promise<void>;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";

@@ -612,6 +612,16 @@ export async function runEmbeddedAttempt(
         onAssistantMessageStart: params.onAssistantMessageStart,
         onAgentEvent: params.onAgentEvent,
         enforceFinalTag: params.enforceFinalTag,
+        onPersonaDirectives: effectiveWorkspace
+          ? async (directives, narrationSegments) => {
+              try {
+                const { processPersonaDirectives } = await import("../../../utils/persona-state-writer.js");
+                await processPersonaDirectives(effectiveWorkspace, directives, narrationSegments);
+              } catch (err) {
+                log.debug(`persona directive processing failed: ${err instanceof Error ? err.message : String(err)}`);
+              }
+            }
+          : undefined,
       });
 
       const {
@@ -834,6 +844,8 @@ export async function runEmbeddedAttempt(
       } finally {
         clearTimeout(abortTimer);
         if (abortWarnTimer) clearTimeout(abortWarnTimer);
+        // Flush any collected persona directives to workspace state files before unsubscribing
+        subscription.flushPersonaDirectives();
         unsubscribe();
         clearActiveEmbeddedRun(params.sessionId, queueHandle);
         params.abortSignal?.removeEventListener?.("abort", onAbort);

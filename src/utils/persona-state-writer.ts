@@ -9,8 +9,9 @@
  *   - memory/presence-state.json — physical presence (location, outfit, posture)
  */
 
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type { PersonaDirective } from "./directive-tags.js";
 
 // ─── Emotion Inertia Model ───────────────────────────────────────────────────
@@ -316,6 +317,88 @@ async function processPresenceDirective(
   }
 }
 
+// ─── Canvas State Writer ─────────────────────────────────────────────────────
+
+/**
+ * Write combined canvas state to the canvas host root directory.
+ * This file is polled by the canvas HTML to update the visual display.
+ */
+async function writeCanvasState(
+  workspaceDir: string,
+  narrationSegments?: string[],
+): Promise<void> {
+  try {
+    const canvasRoot = join(homedir(), ".openclaw", "canvas");
+    await mkdir(canvasRoot, { recursive: true });
+
+    const emotionState = await readJsonFile<EmotionState>(
+      join(workspaceDir, "memory", "emotion-state.json"),
+    );
+    const presenceState = await readJsonFile<PresenceState>(
+      join(workspaceDir, "memory", "presence-state.json"),
+    );
+
+    const canvasState: Record<string, unknown> = {
+      emotion: emotionState?.current
+        ? {
+            name: emotionState.current.secondary ?? emotionState.current.primary,
+            primary: emotionState.current.primary,
+            valence: emotionState.current.valence,
+            arousal: emotionState.current.arousal,
+          }
+        : null,
+      presence: presenceState
+        ? {
+            room: presenceState.location?.room_key ?? null,
+            roomLabel: presenceState.location?.label ?? null,
+            background: await resolveBackground(workspaceDir, presenceState.location?.room_key),
+            posture: presenceState.appearance?.posture ?? null,
+            clothing: presenceState.appearance?.clothing ?? null,
+          }
+        : null,
+      narration: narrationSegments?.length
+        ? narrationSegments[narrationSegments.length - 1]
+        : null,
+      timestamp: new Date().toISOString(),
+    };
+
+    await writeJsonFile(join(canvasRoot, "state.json"), canvasState);
+  } catch (err) {
+    // Non-critical — don't let canvas state writing break the main flow
+    console.error(
+      `[persona-state] Canvas state write failed:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+/**
+ * Resolve background filename from room key using rockwood-rooms.json
+ */
+async function resolveBackground(
+  workspaceDir: string,
+  roomKey?: string,
+): Promise<string | null> {
+  if (!roomKey) return null;
+  try {
+    const rooms = await readJsonFile<{ rooms: Record<string, { background?: string }> }>(
+      join(workspaceDir, "memory", "rockwood-rooms.json"),
+    );
+    if (!rooms?.rooms) return null;
+    // Direct match
+    if (rooms.rooms[roomKey]?.background) return rooms.rooms[roomKey]!.background!;
+    // Fuzzy match: normalize both keys (strip apostrophe-dashes, etc.)
+    const normalize = (k: string) => k.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    const normalizedKey = normalize(roomKey);
+    for (const [k, v] of Object.entries(rooms.rooms)) {
+      if (normalize(k) === normalizedKey && v.background) return v.background;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -328,8 +411,9 @@ async function processPresenceDirective(
 export async function processPersonaDirectives(
   workspaceDir: string,
   directives: PersonaDirective[],
+  narrationSegments?: string[],
 ): Promise<void> {
-  if (!directives.length || !workspaceDir) return;
+  if ((!directives.length && !narrationSegments?.length) || !workspaceDir) return;
 
   const tasks: Promise<void>[] = [];
 
@@ -341,5 +425,9 @@ export async function processPersonaDirectives(
     }
   }
 
+  // Wait for emotion/presence state files to be written first
   await Promise.allSettled(tasks);
+
+  // Then write combined canvas state (reads the freshly-written state files)
+  await writeCanvasState(workspaceDir, narrationSegments);
 }
