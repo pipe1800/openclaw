@@ -1,6 +1,6 @@
+import { resolveFetch } from "./fetch.js";
 import { type ProviderAuth, resolveProviderAuths } from "./provider-usage.auth.js";
 import {
-  fetchAntigravityUsage,
   fetchClaudeUsage,
   fetchCodexUsage,
   fetchCopilotUsage,
@@ -20,7 +20,6 @@ import type {
   UsageProviderId,
   UsageSummary,
 } from "./provider-usage.types.js";
-import { resolveFetch } from "./fetch.js";
 
 type UsageSummaryOptions = {
   now?: number;
@@ -58,8 +57,6 @@ export async function loadProviderUsageSummary(
             return await fetchClaudeUsage(auth.token, timeoutMs, fetchFn);
           case "github-copilot":
             return await fetchCopilotUsage(auth.token, timeoutMs, fetchFn);
-          case "google-antigravity":
-            return await fetchAntigravityUsage(auth.token, timeoutMs, fetchFn);
           case "google-gemini-cli":
             return await fetchGeminiUsage(auth.token, timeoutMs, fetchFn, auth.provider);
           case "openai-codex":
@@ -95,8 +92,12 @@ export async function loadProviderUsageSummary(
 
   const snapshots = await Promise.all(tasks);
   const providers = snapshots.filter((entry) => {
-    if (entry.windows.length > 0) return true;
-    if (!entry.error) return true;
+    if (entry.windows.length > 0) {
+      return true;
+    }
+    if (!entry.error) {
+      return true;
+    }
     return !ignoredErrors.has(entry.error);
   });
 

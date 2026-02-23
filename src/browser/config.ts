@@ -1,10 +1,12 @@
 import type { BrowserConfig, BrowserProfileConfig, OpenClawConfig } from "../config/config.js";
+import { resolveGatewayPort } from "../config/paths.js";
 import {
   deriveDefaultBrowserCdpPortRange,
   deriveDefaultBrowserControlPort,
   DEFAULT_BROWSER_CONTROL_PORT,
 } from "../config/port-defaults.js";
-import { resolveGatewayPort } from "../config/paths.js";
+import { isLoopbackHost } from "../gateway/net.js";
+import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import {
   DEFAULT_OPENCLAW_BROWSER_COLOR,
   DEFAULT_OPENCLAW_BROWSER_ENABLED,
@@ -30,6 +32,8 @@ export type ResolvedBrowserConfig = {
   attachOnly: boolean;
   defaultProfile: string;
   profiles: Record<string, BrowserProfileConfig>;
+  ssrfPolicy?: SsrFPolicy;
+  extraArgs: string[];
 };
 
 export type ResolvedBrowserProfile = {
@@ -42,30 +46,51 @@ export type ResolvedBrowserProfile = {
   driver: "openclaw" | "extension";
 };
 
-function isLoopbackHost(host: string) {
-  const h = host.trim().toLowerCase();
-  return (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h === "0.0.0.0" ||
-    h === "[::1]" ||
-    h === "::1" ||
-    h === "[::]" ||
-    h === "::"
-  );
-}
-
 function normalizeHexColor(raw: string | undefined) {
   const value = (raw ?? "").trim();
-  if (!value) return DEFAULT_OPENCLAW_BROWSER_COLOR;
+  if (!value) {
+    return DEFAULT_OPENCLAW_BROWSER_COLOR;
+  }
   const normalized = value.startsWith("#") ? value : `#${value}`;
-  if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) return DEFAULT_OPENCLAW_BROWSER_COLOR;
+  if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+    return DEFAULT_OPENCLAW_BROWSER_COLOR;
+  }
   return normalized.toUpperCase();
 }
 
 function normalizeTimeoutMs(raw: number | undefined, fallback: number) {
   const value = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : fallback;
   return value < 0 ? fallback : value;
+}
+
+function normalizeStringList(raw: string[] | undefined): string[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return undefined;
+  }
+  const values = raw
+    .map((value) => value.trim())
+    .filter((value): value is string => value.length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function resolveBrowserSsrFPolicy(cfg: BrowserConfig | undefined): SsrFPolicy | undefined {
+  const allowPrivateNetwork = cfg?.ssrfPolicy?.allowPrivateNetwork;
+  const allowedHostnames = normalizeStringList(cfg?.ssrfPolicy?.allowedHostnames);
+  const hostnameAllowlist = normalizeStringList(cfg?.ssrfPolicy?.hostnameAllowlist);
+
+  if (
+    allowPrivateNetwork === undefined &&
+    allowedHostnames === undefined &&
+    hostnameAllowlist === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(allowPrivateNetwork === true ? { allowPrivateNetwork: true } : {}),
+    ...(allowedHostnames ? { allowedHostnames } : {}),
+    ...(hostnameAllowlist ? { hostnameAllowlist } : {}),
+  };
 }
 
 export function parseHttpUrl(raw: string, label: string) {
@@ -124,12 +149,18 @@ function ensureDefaultChromeExtensionProfile(
   controlPort: number,
 ): Record<string, BrowserProfileConfig> {
   const result = { ...profiles };
-  if (result.chrome) return result;
+  if (result.chrome) {
+    return result;
+  }
   const relayPort = controlPort + 1;
-  if (!Number.isFinite(relayPort) || relayPort <= 0 || relayPort > 65535) return result;
+  if (!Number.isFinite(relayPort) || relayPort <= 0 || relayPort > 65535) {
+    return result;
+  }
   // Avoid adding the built-in profile if the derived relay port is already used by another profile
   // (legacy single-profile configs may use controlPort+1 for openclaw/openclaw CDP).
-  if (getUsedPorts(result).has(relayPort)) return result;
+  if (getUsedPorts(result).has(relayPort)) {
+    return result;
+  }
   result.chrome = {
     driver: "extension",
     cdpUrl: `http://127.0.0.1:${relayPort}`,
@@ -198,6 +229,11 @@ export function resolveBrowserConfig(
       ? DEFAULT_BROWSER_DEFAULT_PROFILE_NAME
       : DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME);
 
+  const extraArgs = Array.isArray(cfg?.extraArgs)
+    ? cfg.extraArgs.filter((a): a is string => typeof a === "string" && a.trim().length > 0)
+    : [];
+  const ssrfPolicy = resolveBrowserSsrFPolicy(cfg);
+
   return {
     enabled,
     evaluateEnabled,
@@ -214,6 +250,8 @@ export function resolveBrowserConfig(
     attachOnly,
     defaultProfile,
     profiles,
+    ssrfPolicy,
+    extraArgs,
   };
 }
 
@@ -226,7 +264,9 @@ export function resolveProfile(
   profileName: string,
 ): ResolvedBrowserProfile | null {
   const profile = resolved.profiles[profileName];
-  if (!profile) return null;
+  if (!profile) {
+    return null;
+  }
 
   const rawProfileUrl = profile.cdpUrl?.trim() ?? "";
   let cdpHost = resolved.cdpHost;

@@ -1,5 +1,5 @@
-import { DEFAULT_CHAT_CHANNEL } from "../../channels/registry.js";
 import type { ChannelOutboundTargetMode } from "../../channels/plugins/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import { normalizeAccountId } from "../../utils/account-id.js";
 import {
@@ -9,13 +9,12 @@ import {
   normalizeMessageChannel,
   type GatewayMessageChannel,
 } from "../../utils/message-channel.js";
+import type { OutboundTargetResolution } from "./targets.js";
 import {
   resolveOutboundTarget,
   resolveSessionDeliveryTarget,
   type SessionDeliveryTarget,
 } from "./targets.js";
-import type { OpenClawConfig } from "../../config/config.js";
-import type { OutboundTargetResolution } from "./targets.js";
 
 export type AgentDeliveryPlan = {
   baseDelivery: SessionDeliveryTarget;
@@ -52,20 +51,24 @@ export function resolveAgentDeliveryPlan(params: {
   });
 
   const resolvedChannel = (() => {
-    if (requestedChannel === INTERNAL_MESSAGE_CHANNEL) return INTERNAL_MESSAGE_CHANNEL;
+    if (requestedChannel === INTERNAL_MESSAGE_CHANNEL) {
+      return INTERNAL_MESSAGE_CHANNEL;
+    }
     if (requestedChannel === "last") {
       if (baseDelivery.channel && baseDelivery.channel !== INTERNAL_MESSAGE_CHANNEL) {
         return baseDelivery.channel;
       }
-      return params.wantsDelivery ? DEFAULT_CHAT_CHANNEL : INTERNAL_MESSAGE_CHANNEL;
+      return INTERNAL_MESSAGE_CHANNEL;
     }
 
-    if (isGatewayMessageChannel(requestedChannel)) return requestedChannel;
+    if (isGatewayMessageChannel(requestedChannel)) {
+      return requestedChannel;
+    }
 
     if (baseDelivery.channel && baseDelivery.channel !== INTERNAL_MESSAGE_CHANNEL) {
       return baseDelivery.channel;
     }
-    return params.wantsDelivery ? DEFAULT_CHAT_CHANNEL : INTERNAL_MESSAGE_CHANNEL;
+    return INTERNAL_MESSAGE_CHANNEL;
   })();
 
   const deliveryTargetMode = explicitTo

@@ -6,6 +6,10 @@ import {
   updateLastRoute,
 } from "../config/sessions.js";
 
+function normalizeSessionStoreKey(sessionKey: string): string {
+  return sessionKey.trim().toLowerCase();
+}
+
 export type InboundLastRouteUpdate = {
   sessionKey: string;
   channel: SessionEntry["lastChannel"];
@@ -24,26 +28,31 @@ export async function recordInboundSession(params: {
   onRecordError: (err: unknown) => void;
 }): Promise<void> {
   const { storePath, sessionKey, ctx, groupResolution, createIfMissing } = params;
+  const canonicalSessionKey = normalizeSessionStoreKey(sessionKey);
   void recordSessionMetaFromInbound({
     storePath,
-    sessionKey,
+    sessionKey: canonicalSessionKey,
     ctx,
     groupResolution,
     createIfMissing,
   }).catch(params.onRecordError);
 
   const update = params.updateLastRoute;
-  if (!update) return;
+  if (!update) {
+    return;
+  }
+  const targetSessionKey = normalizeSessionStoreKey(update.sessionKey);
   await updateLastRoute({
     storePath,
-    sessionKey: update.sessionKey,
+    sessionKey: targetSessionKey,
     deliveryContext: {
       channel: update.channel,
       to: update.to,
       accountId: update.accountId,
       threadId: update.threadId,
     },
-    ctx,
+    // Avoid leaking inbound origin metadata into a different target session.
+    ctx: targetSessionKey === canonicalSessionKey ? ctx : undefined,
     groupResolution,
   });
 }

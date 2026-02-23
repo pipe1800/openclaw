@@ -1,13 +1,29 @@
+import util from "node:util";
+import { createAccountActionGate } from "../channels/plugins/account-action-gate.js";
 import type { OpenClawConfig } from "../config/config.js";
-import type { TelegramAccountConfig } from "../config/types.js";
+import type { TelegramAccountConfig, TelegramActionConfig } from "../config/types.js";
 import { isTruthyEnvValue } from "../infra/env.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { listBoundAccountIds, resolveDefaultAgentBoundAccountId } from "../routing/bindings.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 import { resolveTelegramToken } from "./token.js";
 
+const log = createSubsystemLogger("telegram/accounts");
+
+function formatDebugArg(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Error) {
+    return value.stack ?? value.message;
+  }
+  return util.inspect(value, { colors: false, depth: null, compact: true, breakLength: Infinity });
+}
+
 const debugAccounts = (...args: unknown[]) => {
   if (isTruthyEnvValue(process.env.OPENCLAW_DEBUG_TELEGRAM_ACCOUNTS)) {
-    console.warn("[telegram:accounts]", ...args);
+    const parts = args.map((arg) => formatDebugArg(arg));
+    log.warn(parts.join(" ").trim());
   }
 };
 
@@ -22,10 +38,14 @@ export type ResolvedTelegramAccount = {
 
 function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
   const accounts = cfg.channels?.telegram?.accounts;
-  if (!accounts || typeof accounts !== "object") return [];
+  if (!accounts || typeof accounts !== "object") {
+    return [];
+  }
   const ids = new Set<string>();
   for (const key of Object.keys(accounts)) {
-    if (!key) continue;
+    if (!key) {
+      continue;
+    }
     ids.add(normalizeAccountId(key));
   }
   return [...ids];
@@ -36,15 +56,21 @@ export function listTelegramAccountIds(cfg: OpenClawConfig): string[] {
     new Set([...listConfiguredAccountIds(cfg), ...listBoundAccountIds(cfg, "telegram")]),
   );
   debugAccounts("listTelegramAccountIds", ids);
-  if (ids.length === 0) return [DEFAULT_ACCOUNT_ID];
-  return ids.sort((a, b) => a.localeCompare(b));
+  if (ids.length === 0) {
+    return [DEFAULT_ACCOUNT_ID];
+  }
+  return ids.toSorted((a, b) => a.localeCompare(b));
 }
 
 export function resolveDefaultTelegramAccountId(cfg: OpenClawConfig): string {
   const boundDefault = resolveDefaultAgentBoundAccountId(cfg, "telegram");
-  if (boundDefault) return boundDefault;
+  if (boundDefault) {
+    return boundDefault;
+  }
   const ids = listTelegramAccountIds(cfg);
-  if (ids.includes(DEFAULT_ACCOUNT_ID)) return DEFAULT_ACCOUNT_ID;
+  if (ids.includes(DEFAULT_ACCOUNT_ID)) {
+    return DEFAULT_ACCOUNT_ID;
+  }
   return ids[0] ?? DEFAULT_ACCOUNT_ID;
 }
 
@@ -53,9 +79,13 @@ function resolveAccountConfig(
   accountId: string,
 ): TelegramAccountConfig | undefined {
   const accounts = cfg.channels?.telegram?.accounts;
-  if (!accounts || typeof accounts !== "object") return undefined;
+  if (!accounts || typeof accounts !== "object") {
+    return undefined;
+  }
   const direct = accounts[accountId] as TelegramAccountConfig | undefined;
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
   const normalized = normalizeAccountId(accountId);
   const matchKey = Object.keys(accounts).find((key) => normalizeAccountId(key) === normalized);
   return matchKey ? (accounts[matchKey] as TelegramAccountConfig | undefined) : undefined;
@@ -66,6 +96,17 @@ function mergeTelegramAccountConfig(cfg: OpenClawConfig, accountId: string): Tel
     {}) as TelegramAccountConfig & { accounts?: unknown };
   const account = resolveAccountConfig(cfg, accountId) ?? {};
   return { ...base, ...account };
+}
+
+export function createTelegramActionGate(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+}): (key: keyof TelegramActionConfig, defaultValue?: boolean) => boolean {
+  const accountId = normalizeAccountId(params.accountId);
+  return createAccountActionGate({
+    baseActions: params.cfg.channels?.telegram?.actions,
+    accountActions: resolveAccountConfig(params.cfg, accountId)?.actions,
+  });
 }
 
 export function resolveTelegramAccount(params: {
@@ -97,16 +138,24 @@ export function resolveTelegramAccount(params: {
 
   const normalized = normalizeAccountId(params.accountId);
   const primary = resolve(normalized);
-  if (hasExplicitAccountId) return primary;
-  if (primary.tokenSource !== "none") return primary;
+  if (hasExplicitAccountId) {
+    return primary;
+  }
+  if (primary.tokenSource !== "none") {
+    return primary;
+  }
 
   // If accountId is omitted, prefer a configured account token over failing on
   // the implicit "default" account. This keeps env-based setups working while
   // making config-only tokens work for things like heartbeats.
   const fallbackId = resolveDefaultTelegramAccountId(params.cfg);
-  if (fallbackId === primary.accountId) return primary;
+  if (fallbackId === primary.accountId) {
+    return primary;
+  }
   const fallback = resolve(fallbackId);
-  if (fallback.tokenSource === "none") return primary;
+  if (fallback.tokenSource === "none") {
+    return primary;
+  }
   return fallback;
 }
 

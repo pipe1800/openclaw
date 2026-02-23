@@ -16,16 +16,51 @@ export type SignalDaemonOpts = {
 export type SignalDaemonHandle = {
   pid?: number;
   stop: () => void;
+  exited: Promise<SignalDaemonExitEvent>;
+  isExited: () => boolean;
 };
+
+export type SignalDaemonExitEvent = {
+  source: "process" | "spawn-error";
+  code: number | null;
+  signal: NodeJS.Signals | null;
+};
+
+export function formatSignalDaemonExit(exit: SignalDaemonExitEvent): string {
+  return `signal daemon exited (source=${exit.source} code=${String(exit.code ?? "null")} signal=${String(exit.signal ?? "null")})`;
+}
 
 export function classifySignalCliLogLine(line: string): "log" | "error" | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return null;
+  }
   // signal-cli commonly writes all logs to stderr; treat severity explicitly.
-  if (/\b(ERROR|WARN|WARNING)\b/.test(trimmed)) return "error";
+  if (/\b(ERROR|WARN|WARNING)\b/.test(trimmed)) {
+    return "error";
+  }
   // Some signal-cli failures are not tagged with WARN/ERROR but should still be surfaced loudly.
-  if (/\b(FAILED|SEVERE|EXCEPTION)\b/i.test(trimmed)) return "error";
+  if (/\b(FAILED|SEVERE|EXCEPTION)\b/i.test(trimmed)) {
+    return "error";
+  }
   return "log";
+}
+
+function bindSignalCliOutput(params: {
+  stream: NodeJS.ReadableStream | null | undefined;
+  log: (message: string) => void;
+  error: (message: string) => void;
+}): void {
+  params.stream?.on("data", (data) => {
+    for (const line of data.toString().split(/\r?\n/)) {
+      const kind = classifySignalCliLogLine(line);
+      if (kind === "log") {
+        params.log(`signal-cli: ${line.trim()}`);
+      } else if (kind === "error") {
+        params.error(`signal-cli: ${line.trim()}`);
+      }
+    }
+  });
 }
 
 function buildDaemonArgs(opts: SignalDaemonOpts): string[] {
@@ -40,9 +75,15 @@ function buildDaemonArgs(opts: SignalDaemonOpts): string[] {
   if (opts.receiveMode) {
     args.push("--receive-mode", opts.receiveMode);
   }
-  if (opts.ignoreAttachments) args.push("--ignore-attachments");
-  if (opts.ignoreStories) args.push("--ignore-stories");
-  if (opts.sendReadReceipts) args.push("--send-read-receipts");
+  if (opts.ignoreAttachments) {
+    args.push("--ignore-attachments");
+  }
+  if (opts.ignoreStories) {
+    args.push("--ignore-stories");
+  }
+  if (opts.sendReadReceipts) {
+    args.push("--send-read-receipts");
+  }
 
   return args;
 }
@@ -54,29 +95,51 @@ export function spawnSignalDaemon(opts: SignalDaemonOpts): SignalDaemonHandle {
   });
   const log = opts.runtime?.log ?? (() => {});
   const error = opts.runtime?.error ?? (() => {});
-
-  child.stdout?.on("data", (data) => {
-    for (const line of data.toString().split(/\r?\n/)) {
-      const kind = classifySignalCliLogLine(line);
-      if (kind === "log") log(`signal-cli: ${line.trim()}`);
-      else if (kind === "error") error(`signal-cli: ${line.trim()}`);
-    }
+  let exited = false;
+  let settledExit = false;
+  let resolveExit!: (value: SignalDaemonExitEvent) => void;
+  const exitedPromise = new Promise<SignalDaemonExitEvent>((resolve) => {
+    resolveExit = resolve;
   });
-  child.stderr?.on("data", (data) => {
-    for (const line of data.toString().split(/\r?\n/)) {
-      const kind = classifySignalCliLogLine(line);
-      if (kind === "log") log(`signal-cli: ${line.trim()}`);
-      else if (kind === "error") error(`signal-cli: ${line.trim()}`);
+  const settleExit = (value: SignalDaemonExitEvent) => {
+    if (settledExit) {
+      return;
     }
+    settledExit = true;
+    exited = true;
+    resolveExit(value);
+  };
+
+  bindSignalCliOutput({ stream: child.stdout, log, error });
+  bindSignalCliOutput({ stream: child.stderr, log, error });
+  child.once("exit", (code, signal) => {
+    settleExit({
+      source: "process",
+      code: typeof code === "number" ? code : null,
+      signal: signal ?? null,
+    });
+    error(
+      formatSignalDaemonExit({ source: "process", code: code ?? null, signal: signal ?? null }),
+    );
+  });
+  child.once("close", (code, signal) => {
+    settleExit({
+      source: "process",
+      code: typeof code === "number" ? code : null,
+      signal: signal ?? null,
+    });
   });
   child.on("error", (err) => {
     error(`signal-cli spawn error: ${String(err)}`);
+    settleExit({ source: "spawn-error", code: null, signal: null });
   });
 
   return {
     pid: child.pid ?? undefined,
+    exited: exitedPromise,
+    isExited: () => exited,
     stop: () => {
-      if (!child.killed) {
+      if (!child.killed && !exited) {
         child.kill("SIGTERM");
       }
     },

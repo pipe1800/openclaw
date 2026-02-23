@@ -1,26 +1,27 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-
-import { buildHistoryContextFromEntries, type HistoryEntry } from "../auto-reply/reply/history.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommand } from "../commands/agent.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
+import { logWarn } from "../logger.js";
 import { defaultRuntime } from "../runtime.js";
-import { authorizeGatewayConnect, type ResolvedGatewayAuth } from "./auth.js";
+import { resolveAssistantStreamDeltaText } from "./agent-event-assistant-text.js";
 import {
-  readJsonBodyOrError,
-  sendJson,
-  sendMethodNotAllowed,
-  sendUnauthorized,
-  setSseHeaders,
-  writeDone,
-} from "./http-common.js";
-import { getBearerToken, resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
+  buildAgentMessageFromConversationEntries,
+  type ConversationEntry,
+} from "./agent-prompt.js";
+import type { AuthRateLimiter } from "./auth-rate-limit.js";
+import type { ResolvedGatewayAuth } from "./auth.js";
+import { sendJson, setSseHeaders, writeDone } from "./http-common.js";
+import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
+import { resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
   maxBodyBytes?: number;
   trustedProxies?: string[];
+  allowRealIpFallback?: boolean;
+  rateLimiter?: AuthRateLimiter;
 };
 
 type OpenAiChatMessage = {
@@ -40,22 +41,77 @@ function writeSse(res: ServerResponse, data: unknown) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+function buildAgentCommandInput(params: {
+  prompt: { message: string; extraSystemPrompt?: string };
+  sessionKey: string;
+  runId: string;
+}) {
+  return {
+    message: params.prompt.message,
+    extraSystemPrompt: params.prompt.extraSystemPrompt,
+    sessionKey: params.sessionKey,
+    runId: params.runId,
+    deliver: false as const,
+    messageChannel: "webchat" as const,
+    bestEffortDeliver: false as const,
+  };
+}
+
+function writeAssistantRoleChunk(res: ServerResponse, params: { runId: string; model: string }) {
+  writeSse(res, {
+    id: params.runId,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model: params.model,
+    choices: [{ index: 0, delta: { role: "assistant" } }],
+  });
+}
+
+function writeAssistantContentChunk(
+  res: ServerResponse,
+  params: { runId: string; model: string; content: string; finishReason: "stop" | null },
+) {
+  writeSse(res, {
+    id: params.runId,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model: params.model,
+    choices: [
+      {
+        index: 0,
+        delta: { content: params.content },
+        finish_reason: params.finishReason,
+      },
+    ],
+  });
+}
+
 function asMessages(val: unknown): OpenAiChatMessage[] {
   return Array.isArray(val) ? (val as OpenAiChatMessage[]) : [];
 }
 
 function extractTextContent(content: unknown): string {
-  if (typeof content === "string") return content;
+  if (typeof content === "string") {
+    return content;
+  }
   if (Array.isArray(content)) {
     return content
       .map((part) => {
-        if (!part || typeof part !== "object") return "";
+        if (!part || typeof part !== "object") {
+          return "";
+        }
         const type = (part as { type?: unknown }).type;
         const text = (part as { text?: unknown }).text;
         const inputText = (part as { input_text?: unknown }).input_text;
-        if (type === "text" && typeof text === "string") return text;
-        if (type === "input_text" && typeof text === "string") return text;
-        if (typeof inputText === "string") return inputText;
+        if (type === "text" && typeof text === "string") {
+          return text;
+        }
+        if (type === "input_text" && typeof text === "string") {
+          return text;
+        }
+        if (typeof inputText === "string") {
+          return inputText;
+        }
         return "";
       })
       .filter(Boolean)
@@ -71,14 +127,17 @@ function buildAgentPrompt(messagesUnknown: unknown): {
   const messages = asMessages(messagesUnknown);
 
   const systemParts: string[] = [];
-  const conversationEntries: Array<{ role: "user" | "assistant" | "tool"; entry: HistoryEntry }> =
-    [];
+  const conversationEntries: ConversationEntry[] = [];
 
   for (const msg of messages) {
-    if (!msg || typeof msg !== "object") continue;
+    if (!msg || typeof msg !== "object") {
+      continue;
+    }
     const role = typeof msg.role === "string" ? msg.role.trim() : "";
     const content = extractTextContent(msg.content).trim();
-    if (!role || !content) continue;
+    if (!role || !content) {
+      continue;
+    }
     if (role === "system" || role === "developer") {
       systemParts.push(content);
       continue;
@@ -105,32 +164,7 @@ function buildAgentPrompt(messagesUnknown: unknown): {
     });
   }
 
-  let message = "";
-  if (conversationEntries.length > 0) {
-    let currentIndex = -1;
-    for (let i = conversationEntries.length - 1; i >= 0; i -= 1) {
-      const entryRole = conversationEntries[i]?.role;
-      if (entryRole === "user" || entryRole === "tool") {
-        currentIndex = i;
-        break;
-      }
-    }
-    if (currentIndex < 0) currentIndex = conversationEntries.length - 1;
-    const currentEntry = conversationEntries[currentIndex]?.entry;
-    if (currentEntry) {
-      const historyEntries = conversationEntries.slice(0, currentIndex).map((entry) => entry.entry);
-      if (historyEntries.length === 0) {
-        message = currentEntry.body;
-      } else {
-        const formatEntry = (entry: HistoryEntry) => `${entry.sender}: ${entry.body}`;
-        message = buildHistoryContextFromEntries({
-          entries: [...historyEntries, currentEntry],
-          currentMessage: formatEntry(currentEntry),
-          formatEntry,
-        });
-      }
-    }
-  }
+  const message = buildAgentMessageFromConversationEntries(conversationEntries);
 
   return {
     message,
@@ -147,8 +181,22 @@ function resolveOpenAiSessionKey(params: {
 }
 
 function coerceRequest(val: unknown): OpenAiChatCompletionRequest {
-  if (!val || typeof val !== "object") return {};
+  if (!val || typeof val !== "object") {
+    return {};
+  }
   return val as OpenAiChatCompletionRequest;
+}
+
+function resolveAgentResponseText(result: unknown): string {
+  const payloads = (result as { payloads?: Array<{ text?: string }> } | null)?.payloads;
+  if (!Array.isArray(payloads) || payloads.length === 0) {
+    return "No response from OpenClaw.";
+  }
+  const content = payloads
+    .map((p) => (typeof p.text === "string" ? p.text : ""))
+    .filter(Boolean)
+    .join("\n\n");
+  return content || "No response from OpenClaw.";
 }
 
 export async function handleOpenAiHttpRequest(
@@ -156,30 +204,22 @@ export async function handleOpenAiHttpRequest(
   res: ServerResponse,
   opts: OpenAiHttpOptions,
 ): Promise<boolean> {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host || "localhost"}`);
-  if (url.pathname !== "/v1/chat/completions") return false;
-
-  if (req.method !== "POST") {
-    sendMethodNotAllowed(res);
-    return true;
-  }
-
-  const token = getBearerToken(req);
-  const authResult = await authorizeGatewayConnect({
+  const handled = await handleGatewayPostJsonEndpoint(req, res, {
+    pathname: "/v1/chat/completions",
     auth: opts.auth,
-    connectAuth: { token, password: token },
-    req,
     trustedProxies: opts.trustedProxies,
+    allowRealIpFallback: opts.allowRealIpFallback,
+    rateLimiter: opts.rateLimiter,
+    maxBodyBytes: opts.maxBodyBytes ?? 1024 * 1024,
   });
-  if (!authResult.ok) {
-    sendUnauthorized(res);
+  if (handled === false) {
+    return false;
+  }
+  if (!handled) {
     return true;
   }
 
-  const body = await readJsonBodyOrError(req, res, opts.maxBodyBytes ?? 1024 * 1024);
-  if (body === undefined) return true;
-
-  const payload = coerceRequest(body);
+  const payload = coerceRequest(handled.body);
   const stream = Boolean(payload.stream);
   const model = typeof payload.model === "string" ? payload.model : "openclaw";
   const user = typeof payload.user === "string" ? payload.user : undefined;
@@ -199,31 +239,17 @@ export async function handleOpenAiHttpRequest(
 
   const runId = `chatcmpl_${randomUUID()}`;
   const deps = createDefaultDeps();
+  const commandInput = buildAgentCommandInput({
+    prompt,
+    sessionKey,
+    runId,
+  });
 
   if (!stream) {
     try {
-      const result = await agentCommand(
-        {
-          message: prompt.message,
-          extraSystemPrompt: prompt.extraSystemPrompt,
-          sessionKey,
-          runId,
-          deliver: false,
-          messageChannel: "webchat",
-          bestEffortDeliver: false,
-        },
-        defaultRuntime,
-        deps,
-      );
+      const result = await agentCommand(commandInput, defaultRuntime, deps);
 
-      const payloads = (result as { payloads?: Array<{ text?: string }> } | null)?.payloads;
-      const content =
-        Array.isArray(payloads) && payloads.length > 0
-          ? payloads
-              .map((p) => (typeof p.text === "string" ? p.text : ""))
-              .filter(Boolean)
-              .join("\n\n")
-          : "No response from OpenClaw.";
+      const content = resolveAgentResponseText(result);
 
       sendJson(res, 200, {
         id: runId,
@@ -240,8 +266,9 @@ export async function handleOpenAiHttpRequest(
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       });
     } catch (err) {
+      logWarn(`openai-compat: chat completion failed: ${String(err)}`);
       sendJson(res, 500, {
-        error: { message: String(err), type: "api_error" },
+        error: { message: "internal error", type: "api_error" },
       });
     }
     return true;
@@ -254,39 +281,30 @@ export async function handleOpenAiHttpRequest(
   let closed = false;
 
   const unsubscribe = onAgentEvent((evt) => {
-    if (evt.runId !== runId) return;
-    if (closed) return;
+    if (evt.runId !== runId) {
+      return;
+    }
+    if (closed) {
+      return;
+    }
 
     if (evt.stream === "assistant") {
-      const delta = evt.data?.delta;
-      const text = evt.data?.text;
-      const content = typeof delta === "string" ? delta : typeof text === "string" ? text : "";
-      if (!content) return;
+      const content = resolveAssistantStreamDeltaText(evt);
+      if (!content) {
+        return;
+      }
 
       if (!wroteRole) {
         wroteRole = true;
-        writeSse(res, {
-          id: runId,
-          object: "chat.completion.chunk",
-          created: Math.floor(Date.now() / 1000),
-          model,
-          choices: [{ index: 0, delta: { role: "assistant" } }],
-        });
+        writeAssistantRoleChunk(res, { runId, model });
       }
 
       sawAssistantDelta = true;
-      writeSse(res, {
-        id: runId,
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
+      writeAssistantContentChunk(res, {
+        runId,
         model,
-        choices: [
-          {
-            index: 0,
-            delta: { content },
-            finish_reason: null,
-          },
-        ],
+        content,
+        finishReason: null,
       });
       return;
     }
@@ -309,72 +327,38 @@ export async function handleOpenAiHttpRequest(
 
   void (async () => {
     try {
-      const result = await agentCommand(
-        {
-          message: prompt.message,
-          extraSystemPrompt: prompt.extraSystemPrompt,
-          sessionKey,
-          runId,
-          deliver: false,
-          messageChannel: "webchat",
-          bestEffortDeliver: false,
-        },
-        defaultRuntime,
-        deps,
-      );
+      const result = await agentCommand(commandInput, defaultRuntime, deps);
 
-      if (closed) return;
+      if (closed) {
+        return;
+      }
 
       if (!sawAssistantDelta) {
         if (!wroteRole) {
           wroteRole = true;
-          writeSse(res, {
-            id: runId,
-            object: "chat.completion.chunk",
-            created: Math.floor(Date.now() / 1000),
-            model,
-            choices: [{ index: 0, delta: { role: "assistant" } }],
-          });
+          writeAssistantRoleChunk(res, { runId, model });
         }
 
-        const payloads = (result as { payloads?: Array<{ text?: string }> } | null)?.payloads;
-        const content =
-          Array.isArray(payloads) && payloads.length > 0
-            ? payloads
-                .map((p) => (typeof p.text === "string" ? p.text : ""))
-                .filter(Boolean)
-                .join("\n\n")
-            : "No response from OpenClaw.";
+        const content = resolveAgentResponseText(result);
 
         sawAssistantDelta = true;
-        writeSse(res, {
-          id: runId,
-          object: "chat.completion.chunk",
-          created: Math.floor(Date.now() / 1000),
+        writeAssistantContentChunk(res, {
+          runId,
           model,
-          choices: [
-            {
-              index: 0,
-              delta: { content },
-              finish_reason: null,
-            },
-          ],
+          content,
+          finishReason: null,
         });
       }
     } catch (err) {
-      if (closed) return;
-      writeSse(res, {
-        id: runId,
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
+      logWarn(`openai-compat: streaming chat completion failed: ${String(err)}`);
+      if (closed) {
+        return;
+      }
+      writeAssistantContentChunk(res, {
+        runId,
         model,
-        choices: [
-          {
-            index: 0,
-            delta: { content: `Error: ${String(err)}` },
-            finish_reason: "stop",
-          },
-        ],
+        content: "Error: internal error",
+        finishReason: "stop",
       });
       emitAgentEvent({
         runId,

@@ -1,5 +1,5 @@
 import { RateLimitError } from "@buape/carbon";
-
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { formatErrorMessage } from "./errors.js";
 import { type RetryConfig, resolveRetryConfig, retryAsync } from "./retry.js";
 
@@ -20,9 +20,12 @@ export const TELEGRAM_RETRY_DEFAULTS = {
 };
 
 const TELEGRAM_RETRY_RE = /429|timeout|connect|reset|closed|unavailable|temporarily/i;
+const log = createSubsystemLogger("retry-policy");
 
 function getTelegramRetryAfterMs(err: unknown): number | undefined {
-  if (!err || typeof err !== "object") return undefined;
+  if (!err || typeof err !== "object") {
+    return undefined;
+  }
   const candidate =
     "parameters" in err && err.parameters && typeof err.parameters === "object"
       ? (err.parameters as { retry_after?: unknown }).retry_after
@@ -60,7 +63,7 @@ export function createDiscordRetryRunner(params: {
         ? (info) => {
             const labelText = info.label ?? "request";
             const maxRetries = Math.max(1, info.maxAttempts - 1);
-            console.warn(
+            log.warn(
               `discord ${labelText} rate limited, retry ${info.attempt}/${maxRetries} in ${info.delayMs}ms`,
             );
           }
@@ -91,7 +94,7 @@ export function createTelegramRetryRunner(params: {
       onRetry: params.verbose
         ? (info) => {
             const maxRetries = Math.max(1, info.maxAttempts - 1);
-            console.warn(
+            log.warn(
               `telegram send retry ${info.attempt}/${maxRetries} for ${info.label ?? label ?? "request"} in ${info.delayMs}ms: ${formatErrorMessage(info.err)}`,
             );
           }

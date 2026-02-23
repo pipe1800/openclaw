@@ -1,5 +1,5 @@
-import type { ChannelDirectoryEntry } from "../channels/plugins/types.js";
 import type { DirectoryConfigParams } from "../channels/plugins/directory-config.js";
+import type { ChannelDirectoryEntry } from "../channels/plugins/types.js";
 import { resolveDiscordAccount } from "./accounts.js";
 import { fetchDiscord } from "./api.js";
 import { normalizeDiscordSlug } from "./monitor/allow-list.js";
@@ -9,6 +9,7 @@ type DiscordGuild = { id: string; name: string };
 type DiscordUser = { id: string; username: string; global_name?: string; bot?: boolean };
 type DiscordMember = { user: DiscordUser; nick?: string | null };
 type DiscordChannel = { id: string; name?: string | null };
+type DiscordDirectoryAccess = { token: string; query: string };
 
 function normalizeQuery(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
@@ -18,22 +19,43 @@ function buildUserRank(user: DiscordUser): number {
   return user.bot ? 0 : 1;
 }
 
+function resolveDiscordDirectoryAccess(
+  params: DirectoryConfigParams,
+): DiscordDirectoryAccess | null {
+  const account = resolveDiscordAccount({ cfg: params.cfg, accountId: params.accountId });
+  const token = normalizeDiscordToken(account.token);
+  if (!token) {
+    return null;
+  }
+  return { token, query: normalizeQuery(params.query) };
+}
+
+async function listDiscordGuilds(token: string): Promise<DiscordGuild[]> {
+  const rawGuilds = await fetchDiscord<DiscordGuild[]>("/users/@me/guilds", token);
+  return rawGuilds.filter((guild) => guild.id && guild.name);
+}
+
 export async function listDiscordDirectoryGroupsLive(
   params: DirectoryConfigParams,
 ): Promise<ChannelDirectoryEntry[]> {
-  const account = resolveDiscordAccount({ cfg: params.cfg, accountId: params.accountId });
-  const token = normalizeDiscordToken(account.token);
-  if (!token) return [];
-  const query = normalizeQuery(params.query);
-  const guilds = await fetchDiscord<DiscordGuild[]>("/users/@me/guilds", token);
+  const access = resolveDiscordDirectoryAccess(params);
+  if (!access) {
+    return [];
+  }
+  const { token, query } = access;
+  const guilds = await listDiscordGuilds(token);
   const rows: ChannelDirectoryEntry[] = [];
 
   for (const guild of guilds) {
     const channels = await fetchDiscord<DiscordChannel[]>(`/guilds/${guild.id}/channels`, token);
     for (const channel of channels) {
       const name = channel.name?.trim();
-      if (!name) continue;
-      if (query && !normalizeDiscordSlug(name).includes(normalizeDiscordSlug(query))) continue;
+      if (!name) {
+        continue;
+      }
+      if (query && !normalizeDiscordSlug(name).includes(normalizeDiscordSlug(query))) {
+        continue;
+      }
       rows.push({
         kind: "group",
         id: `channel:${channel.id}`,
@@ -53,13 +75,16 @@ export async function listDiscordDirectoryGroupsLive(
 export async function listDiscordDirectoryPeersLive(
   params: DirectoryConfigParams,
 ): Promise<ChannelDirectoryEntry[]> {
-  const account = resolveDiscordAccount({ cfg: params.cfg, accountId: params.accountId });
-  const token = normalizeDiscordToken(account.token);
-  if (!token) return [];
-  const query = normalizeQuery(params.query);
-  if (!query) return [];
+  const access = resolveDiscordDirectoryAccess(params);
+  if (!access) {
+    return [];
+  }
+  const { token, query } = access;
+  if (!query) {
+    return [];
+  }
 
-  const guilds = await fetchDiscord<DiscordGuild[]>("/users/@me/guilds", token);
+  const guilds = await listDiscordGuilds(token);
   const rows: ChannelDirectoryEntry[] = [];
   const limit = typeof params.limit === "number" && params.limit > 0 ? params.limit : 25;
 
@@ -74,7 +99,9 @@ export async function listDiscordDirectoryPeersLive(
     );
     for (const member of members) {
       const user = member.user;
-      if (!user?.id) continue;
+      if (!user?.id) {
+        continue;
+      }
       const name = member.nick?.trim() || user.global_name?.trim() || user.username?.trim();
       rows.push({
         kind: "user",
@@ -84,7 +111,9 @@ export async function listDiscordDirectoryPeersLive(
         rank: buildUserRank(user),
         raw: member,
       });
-      if (rows.length >= limit) return rows;
+      if (rows.length >= limit) {
+        return rows;
+      }
     }
   }
 

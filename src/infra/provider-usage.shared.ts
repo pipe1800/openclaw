@@ -7,7 +7,6 @@ export const PROVIDER_LABELS: Record<UsageProviderId, string> = {
   anthropic: "Claude",
   "github-copilot": "Copilot",
   "google-gemini-cli": "Gemini",
-  "google-antigravity": "Antigravity",
   minimax: "MiniMax",
   "openai-codex": "Codex",
   xiaomi: "Xiaomi",
@@ -18,7 +17,6 @@ export const usageProviders: UsageProviderId[] = [
   "anthropic",
   "github-copilot",
   "google-gemini-cli",
-  "google-antigravity",
   "minimax",
   "openai-codex",
   "xiaomi",
@@ -26,7 +24,9 @@ export const usageProviders: UsageProviderId[] = [
 ];
 
 export function resolveUsageProviderId(provider?: string | null): UsageProviderId | undefined {
-  if (!provider) return undefined;
+  if (!provider) {
+    return undefined;
+  }
   const normalized = normalizeProviderId(provider);
   return usageProviders.includes(normalized as UsageProviderId)
     ? (normalized as UsageProviderId)
@@ -54,6 +54,8 @@ export const withTimeout = async <T>(work: Promise<T>, ms: number, fallback: T):
       }),
     ]);
   } finally {
-    if (timeout) clearTimeout(timeout);
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 };
