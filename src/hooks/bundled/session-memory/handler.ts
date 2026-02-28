@@ -135,6 +135,11 @@ async function findPreviousSessionFile(params: {
         return path.join(params.sessionsDir, canonicalFile);
       }
 
+      const resetVariant = files.find((f) => f.startsWith(`${trimmedSessionId}.jsonl.reset.`));
+      if (resetVariant) {
+        return path.join(params.sessionsDir, resetVariant);
+      }
+
       const topicVariants = files
         .filter(
           (name) =>
@@ -171,8 +176,11 @@ async function findPreviousSessionFile(params: {
  */
 const saveSessionToMemory: HookHandler = async (event) => {
   // Only trigger on reset/new commands
-  const isResetCommand = event.action === "new" || event.action === "reset";
-  if (event.type !== "command" || !isResetCommand) {
+  const isCommandReset =
+    event.type === "command" && (event.action === "new" || event.action === "reset");
+  const isSessionReset = event.type === "session" && event.action === "reset";
+
+  if (!isCommandReset && !isSessionReset) {
     return;
   }
 
