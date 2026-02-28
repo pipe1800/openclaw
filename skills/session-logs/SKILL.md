@@ -1,6 +1,6 @@
 ---
 name: session-logs
-description: Search and analyze your own session logs (older/parent conversations) using jq.
+description: Search and analyze your own session logs (older/parent conversations) using jq and rg.
 metadata: { "openclaw": { "emoji": "📜", "requires": { "bins": ["jq", "rg"] } } }
 ---
 
@@ -29,61 +29,65 @@ Each `.jsonl` file contains messages with:
 - `message.content[]`: Text, thinking, or tool calls (filter `type=="text"` for human-readable content)
 - `message.usage.cost.total`: Cost per response
 
-## Common Queries
+## Common Queries (PowerShell)
 
 ### List all sessions by date and size
 
-```bash
-for f in ~/.openclaw/agents/<agentId>/sessions/*.jsonl; do
-  date=$(head -1 "$f" | jq -r '.timestamp' | cut -dT -f1)
-  size=$(ls -lh "$f" | awk '{print $5}')
-  echo "$date $size $(basename $f)"
-done | sort -r
+```powershell
+Get-ChildItem -Path ~/.openclaw/agents/<agentId>/sessions/*.jsonl | ForEach-Object {
+    $date = (Get-Content $_.FullName -TotalCount 1 | jq -r '.timestamp').Split('T')[0]
+    $size = [math]::Round($_.Length / 1MB, 2)
+    [PSCustomObject]@{ Date = $date; SizeMB = $size; Name = $_.Name }
+} | Sort-Object Date -Descending
 ```
 
 ### Find sessions from a specific day
 
-```bash
-for f in ~/.openclaw/agents/<agentId>/sessions/*.jsonl; do
-  head -1 "$f" | jq -r '.timestamp' | grep -q "2026-01-06" && echo "$f"
-done
+```powershell
+Get-ChildItem -Path ~/.openclaw/agents/<agentId>/sessions/*.jsonl | ForEach-Object {
+    if ((Get-Content $_.FullName -TotalCount 1 | jq -r '.timestamp') -match "2026-01-06") {
+        $_.FullName
+    }
+}
 ```
 
 ### Extract user messages from a session
 
-```bash
-jq -r 'select(.message.role == "user") | .message.content[]? | select(.type == "text") | .text' <session>.jsonl
+```powershell
+jq -r 'select(.message.role == \"user\") | .message.content[]? | select(.type == \"text\") | .text' <session>.jsonl
 ```
 
 ### Search for keyword in assistant responses
 
-```bash
-jq -r 'select(.message.role == "assistant") | .message.content[]? | select(.type == "text") | .text' <session>.jsonl | rg -i "keyword"
+```powershell
+jq -r 'select(.message.role == \"assistant\") | .message.content[]? | select(.type == \"text\") | .text' <session>.jsonl | rg -i "keyword"
 ```
 
 ### Get total cost for a session
 
-```bash
+```powershell
 jq -s '[.[] | .message.usage.cost.total // 0] | add' <session>.jsonl
 ```
 
 ### Daily cost summary
 
-```bash
-for f in ~/.openclaw/agents/<agentId>/sessions/*.jsonl; do
-  date=$(head -1 "$f" | jq -r '.timestamp' | cut -dT -f1)
-  cost=$(jq -s '[.[] | .message.usage.cost.total // 0] | add' "$f")
-  echo "$date $cost"
-done | awk '{a[$1]+=$2} END {for(d in a) print d, "$"a[d]}' | sort -r
+```powershell
+$costs = @{}
+Get-ChildItem -Path ~/.openclaw/agents/<agentId>/sessions/*.jsonl | ForEach-Object {
+    $date = (Get-Content $_.FullName -TotalCount 1 | jq -r '.timestamp').Split('T')[0]
+    $cost = [double](jq -s '[.[] | .message.usage.cost.total // 0] | add' $_.FullName)
+    $costs[$date] += $cost
+}
+$costs.GetEnumerator() | Sort-Object Name -Descending | ForEach-Object { "$($_.Name) `$$( [math]::Round($_.Value, 4) )" }
 ```
 
 ### Count messages and tokens in a session
 
-```bash
+```powershell
 jq -s '{
   messages: length,
-  user: [.[] | select(.message.role == "user")] | length,
-  assistant: [.[] | select(.message.role == "assistant")] | length,
+  user: [.[] | select(.message.role == \"user\")] | length,
+  assistant: [.[] | select(.message.role == \"assistant\")] | length,
   first: .[0].timestamp,
   last: .[-1].timestamp
 }' <session>.jsonl
@@ -91,25 +95,25 @@ jq -s '{
 
 ### Tool usage breakdown
 
-```bash
-jq -r '.message.content[]? | select(.type == "toolCall") | .name' <session>.jsonl | sort | uniq -c | sort -rn
+```powershell
+jq -r '.message.content[]? | select(.type == \"toolCall\") | .name' <session>.jsonl | Group-Object | Sort-Object Count -Descending | Select-Object Count, Name
 ```
 
 ### Search across ALL sessions for a phrase
 
-```bash
+```powershell
 rg -l "phrase" ~/.openclaw/agents/<agentId>/sessions/*.jsonl
 ```
 
 ## Tips
 
 - Sessions are append-only JSONL (one JSON object per line)
-- Large sessions can be several MB - use `head`/`tail` for sampling
+- Large sessions can be several MB - use `Select-Object -First N` or `Get-Content -Tail N` for sampling
 - The `sessions.json` index maps chat providers (discord, whatsapp, etc.) to session IDs
 - Deleted sessions have `.deleted.<timestamp>` suffix
 
 ## Fast text-only hint (low noise)
 
-```bash
-jq -r 'select(.type=="message") | .message.content[]? | select(.type=="text") | .text' ~/.openclaw/agents/<agentId>/sessions/<id>.jsonl | rg 'keyword'
+```powershell
+jq -r 'select(.type==\"message\") | .message.content[]? | select(.type==\"text\") | .text' ~/.openclaw/agents/<agentId>/sessions/<id>.jsonl | rg 'keyword'
 ```

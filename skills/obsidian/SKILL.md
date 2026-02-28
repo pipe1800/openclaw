@@ -11,12 +11,11 @@ metadata:
         "install":
           [
             {
-              "id": "brew",
-              "kind": "brew",
-              "formula": "yakitrak/yakitrak/obsidian-cli",
-              "bins": ["obsidian-cli"],
-              "label": "Install obsidian-cli (brew)",
-            },
+              "id": "powershell",
+              "kind": "run",
+              "script": "$url='https://github.com/Yakitrak/notesmd-cli/releases/download/v0.3.1/notesmd-cli_0.3.1_windows_amd64.tar.gz'; $dest=\"$env:TEMP\\notesmd.tar.gz\"; Invoke-WebRequest -Uri $url -OutFile $dest; tar -xf $dest -C $env:TEMP; Copy-Item \"$env:TEMP\\notesmd-cli.exe\" \"$env:LOCALAPPDATA\\Microsoft\\WinGet\\Links\\obsidian-cli.exe\" -Force; Remove-Item $dest, \"$env:TEMP\\notesmd-cli.exe\"",
+              "label": "Install obsidian-cli (Windows)",
+            }
           ],
       },
   }
@@ -37,14 +36,15 @@ Vault structure (typical)
 
 Obsidian desktop tracks vaults here (source of truth):
 
-- `~/Library/Application Support/obsidian/obsidian.json`
+- `%APPDATA%\obsidian\obsidian.json` (Windows)
+- `~/Library/Application Support/obsidian/obsidian.json` (macOS)
 
 `obsidian-cli` resolves vaults from that file; vault name is typically the **folder name** (path suffix).
 
 Fast “what vault is active / where are the notes?”
 
 - If you’ve already set a default: `obsidian-cli print-default --path-only`
-- Otherwise, read `~/Library/Application Support/obsidian/obsidian.json` and use the vault entry with `"open": true`.
+- Otherwise, read `%APPDATA%\obsidian\obsidian.json` and use the vault entry with `"open": true`.
 
 Notes
 

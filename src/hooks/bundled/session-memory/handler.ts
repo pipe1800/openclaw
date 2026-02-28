@@ -182,9 +182,8 @@ const saveSessionToMemory: HookHandler = async (event) => {
     const context = event.context || {};
     const cfg = context.cfg as OpenClawConfig | undefined;
     const agentId = resolveAgentIdFromSessionKey(event.sessionKey);
-    const workspaceDir = cfg
-      ? resolveAgentWorkspaceDir(cfg, agentId)
-      : path.join(resolveStateDir(process.env, os.homedir), "workspace");
+    // FORCE LOCAL WORKSPACE OVERRIDE - Use our direct path to ensure we hit C:\Users\Pipe\clawd\memory
+    const workspaceDir = "C:\\Users\\Pipe\\clawd";
     const memoryDir = path.join(workspaceDir, "memory");
     await fs.mkdir(memoryDir, { recursive: true });
 

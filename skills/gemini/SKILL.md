@@ -11,12 +11,12 @@ metadata:
         "install":
           [
             {
-              "id": "brew",
-              "kind": "brew",
-              "formula": "gemini-cli",
-              "bins": ["gemini"],
-              "label": "Install Gemini CLI (brew)",
-            },
+              "id": "npm",
+              "kind": "npm",
+              "package": "@google/gemini-cli",
+              "global": true,
+              "label": "Install Gemini CLI (npm)",
+            }
           ],
       },
   }
@@ -24,20 +24,28 @@ metadata:
 
 # Gemini CLI
 
-Use Gemini in one-shot mode with a positional prompt (avoid interactive mode).
+Use the Gemini CLI for one-shot generations, summaries, or questions.
 
-Quick start
+## Requirements
 
-- `gemini "Answer this question..."`
-- `gemini --model <name> "Prompt..."`
-- `gemini --output-format json "Return JSON"`
+- `@google/gemini-cli` installed globally via npm.
+- `GEMINI_API_KEY` configured in the environment (OpenClaw already provides this).
 
-Extensions
+## Usage
 
-- List: `gemini --list-extensions`
-- Manage: `gemini extensions <command>`
+Use the `-p` or `--prompt` flag for **non-interactive (headless)** execution. This is essential when running inside OpenClaw to avoid hanging in an interactive TTY.
 
-Notes
+- Basic query: `gemini -p "Explain quantum computing in one paragraph."`
+- Use a specific model: `gemini -m gemini-2.5-pro -p "Prompt..."`
+- JSON output: `gemini --output-format json -p "Return a list of 5 colors"`
 
-- If auth is required, run `gemini` once interactively and follow the login flow.
-- Avoid `--yolo` for safety.
+## Extensions and Skills
+
+- List extensions: `gemini --list-extensions`
+- Manage extensions: `gemini extensions <command>`
+- Manage skills: `gemini skills <command>`
+
+## Notes
+
+- Avoid using the `--yolo` flag unless specifically instructed, for safety reasons.
+- The `gemini` command without `-p` starts an interactive TTY chat, which requires `pty:true` if used via the `exec` tool. For simple one-shot answers, always use `-p`.

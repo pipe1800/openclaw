@@ -1,64 +1,57 @@
 ---
 name: spotify-player
-description: Terminal Spotify playback/search via spogo (preferred) or spotify_player.
-homepage: https://www.spotify.com
+description: Terminal Spotify playback/search via spotify_player. Use when asked to play music, search Spotify, or control playback.
+homepage: https://github.com/aome510/spotify-player
 metadata:
   {
     "openclaw":
       {
         "emoji": "🎵",
-        "requires": { "anyBins": ["spogo", "spotify_player"] },
+        "requires": { "anyBins": ["spotify_player"] },
         "install":
           [
             {
-              "id": "brew",
-              "kind": "brew",
-              "formula": "spogo",
-              "tap": "steipete/tap",
-              "bins": ["spogo"],
-              "label": "Install spogo (brew)",
-            },
-            {
-              "id": "brew",
-              "kind": "brew",
-              "formula": "spotify_player",
-              "bins": ["spotify_player"],
-              "label": "Install spotify_player (brew)",
-            },
+              "id": "winget",
+              "kind": "winget",
+              "package": "aome510.spotify-player",
+              "label": "Install spotify_player (winget)",
+            }
           ],
       },
   }
 ---
 
-# spogo / spotify_player
+# spotify_player
 
-Use `spogo` **(preferred)** for Spotify playback/search. Fall back to `spotify_player` if needed.
+Use `spotify_player` to control Spotify playback and search for music.
 
-Requirements
+## Requirements
 
 - Spotify Premium account.
-- Either `spogo` or `spotify_player` installed.
+- `spotify_player` installed via `winget install aome510.spotify-player`.
 
-spogo setup
+## Setup / Authentication
 
-- Import cookies: `spogo auth import --browser chrome`
+On first run, the user needs to authenticate. Running any command like `spotify_player authenticate` will generate a login URL or open the browser automatically.
 
-Common CLI commands
+## Common CLI Commands
 
-- Search: `spogo search track "query"`
-- Playback: `spogo play|pause|next|prev`
-- Devices: `spogo device list`, `spogo device set "<name|id>"`
-- Status: `spogo status`
+- **Authentication:** `spotify_player authenticate`
+- **Playback Control:**
+  - Play: `spotify_player playback play`
+  - Pause: `spotify_player playback pause`
+  - Next track: `spotify_player playback next`
+  - Previous track: `spotify_player playback previous`
+- **Search and Play:**
+  - Search track and play: `spotify_player playback start track "<query>"`
+  - Search playlist and play: `spotify_player playback start playlist "<query>"`
+  - Search album and play: `spotify_player playback start album "<query>"`
+- **Connect Device:**
+  - `spotify_player connect`
+- **Like Track:**
+  - `spotify_player like`
 
-spotify_player commands (fallback)
+## Notes
 
-- Search: `spotify_player search "query"`
-- Playback: `spotify_player playback play|pause|next|previous`
-- Connect device: `spotify_player connect`
-- Like track: `spotify_player like`
-
-Notes
-
-- Config folder: `~/.config/spotify-player` (e.g., `app.toml`).
-- For Spotify Connect integration, set a user `client_id` in config.
-- TUI shortcuts are available via `?` in the app.
+- Config folder on Windows is typically `%USERPROFILE%\.config\spotify-player` or `%APPDATA%\spotify-player`.
+- The CLI can run seamlessly in OpenClaw's background tasks to queue music or skip tracks while the user works.
